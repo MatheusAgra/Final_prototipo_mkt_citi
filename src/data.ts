@@ -61,8 +61,10 @@ export interface Campaign {
   endDate: string
   reach: number
   targetReach: number
+  showTargetReachInChart: boolean
   interactions: number
   targetInteractions: number
+  showTargetInteractionsInChart: boolean
   status: CampaignStatus
   daysRunning: number
   dailyEntries: CampaignMetricEntry[]

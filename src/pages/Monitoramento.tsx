@@ -53,8 +53,10 @@ function mapCampaign(row: any): Campaign {
     endDate: String(row.dataFim).slice(0, 10),
     reach: row.alcanceAtual,
     targetReach: row.alcanceMeta,
+    showTargetReachInChart: row.alcanceMetaGrafico ?? true,
     interactions: row.interacoesAtual,
     targetInteractions: row.interacoesMeta,
+    showTargetInteractionsInChart: row.interacoesMetaGrafico ?? true,
     status: row.status.toLowerCase() as CampaignStatus,
     daysRunning: row.diasNoAr,
     dailyEntries: (row.metricasDiarias ?? []).map((m: any) => ({ id: m.id, date: String(m.data).slice(0, 10), reach: m.alcance, interactions: m.interacoes, showInChart: m.mostrarGrafico ?? true })),
@@ -1177,7 +1179,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
   const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; showInChart: boolean }>>({})
-  const [form, setForm] = useState({ name: '', objective: '', audience: '', startDate: '', endDate: '', targetReach: '', targetInteractions: '', channels: [] as ChannelType[] })
+  const emptyCampaignForm = { name: '', objective: '', audience: '', startDate: '', endDate: '', channels: [] as ChannelType[], createGoal: false, targetReach: '', showTargetReachInChart: true, targetInteractions: '', showTargetInteractionsInChart: true }
+  const [form, setForm] = useState(emptyCampaignForm)
 
   function reload() {
     api.campaigns.list().then((rows) => setCampaigns(rows.map(mapCampaign))).catch(console.error)
@@ -1199,14 +1202,16 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
       publico: form.audience.trim() || 'Não definido',
       dataInicio: form.startDate || new Date().toISOString().slice(0, 10),
       dataFim: form.endDate || new Date().toISOString().slice(0, 10),
-      alcanceMeta: parseInt(form.targetReach) || 0,
-      interacoesMeta: parseInt(form.targetInteractions) || 0,
+      alcanceMeta: form.createGoal ? (parseInt(form.targetReach) || 0) : 0,
+      interacoesMeta: form.createGoal ? (parseInt(form.targetInteractions) || 0) : 0,
+      alcanceMetaGrafico: form.showTargetReachInChart,
+      interacoesMetaGrafico: form.showTargetInteractionsInChart,
       canais: (form.channels.length ? form.channels : (['instagram'] as ChannelType[])).map((ch) => CHANNEL_TO_API[ch]),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
     setCampaigns((prev) => [...prev, mapCampaign(created)])
     setShowForm(false)
-    setForm({ name: '', objective: '', audience: '', startDate: '', endDate: '', targetReach: '', targetInteractions: '', channels: [] })
+    setForm(emptyCampaignForm)
   }
 
   async function deleteCampaign(id: string) {
@@ -1261,8 +1266,30 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
               <div className="col-span-2"><FormField label="Público-alvo"><Inp value={form.audience} onChange={(v) => setForm((f) => ({ ...f, audience: v }))} placeholder="Gerentes de marketing B2B" /></FormField></div>
               <FormField label="Início"><Inp type="date" value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></FormField>
               <FormField label="Término"><Inp type="date" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></FormField>
-              <FormField label="Meta de alcance (opcional)"><Inp type="number" value={form.targetReach} onChange={(v) => setForm((f) => ({ ...f, targetReach: v }))} placeholder="Sem meta definida" /></FormField>
-              <FormField label="Meta de interações (opcional)"><Inp type="number" value={form.targetInteractions} onChange={(v) => setForm((f) => ({ ...f, targetInteractions: v }))} placeholder="Sem meta definida" /></FormField>
+              <div className="col-span-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-[#8A8A9A] mb-2 cursor-pointer w-fit">
+                  <input type="checkbox" checked={form.createGoal} onChange={(e) => setForm((f) => ({ ...f, createGoal: e.target.checked }))} className="accent-[#7D1AD7]" />
+                  Criar meta para esta campanha
+                </label>
+                {form.createGoal && (
+                  <div className="grid grid-cols-2 gap-4 rounded-xl p-4" style={{ background: '#202024', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div>
+                      <FormField label="Meta de alcance"><Inp type="number" value={form.targetReach} onChange={(v) => setForm((f) => ({ ...f, targetReach: v }))} placeholder="Ex: 50000" /></FormField>
+                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mt-2 cursor-pointer w-fit">
+                        <input type="checkbox" checked={form.showTargetReachInChart} onChange={(e) => setForm((f) => ({ ...f, showTargetReachInChart: e.target.checked }))} className="accent-[#7D1AD7]" />
+                        Mostrar no gráfico de métricas diárias
+                      </label>
+                    </div>
+                    <div>
+                      <FormField label="Meta de interações"><Inp type="number" value={form.targetInteractions} onChange={(v) => setForm((f) => ({ ...f, targetInteractions: v }))} placeholder="Ex: 3000" /></FormField>
+                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mt-2 cursor-pointer w-fit">
+                        <input type="checkbox" checked={form.showTargetInteractionsInChart} onChange={(e) => setForm((f) => ({ ...f, showTargetInteractionsInChart: e.target.checked }))} className="accent-[#7D1AD7]" />
+                        Mostrar no gráfico de métricas diárias
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-[#8A8A9A] mb-2">Canais</label>
                 <div className="flex gap-2 flex-wrap">
@@ -1381,7 +1408,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
                               <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
                                 formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
-                              {camp.targetReach > 0 && <ReferenceLine y={camp.targetReach} stroke="#7D1AD7" strokeDasharray="4 4" label={{ value: 'Meta alcance', fill: '#7D1AD7', fontSize: 10 }} />}
+                              {camp.targetReach > 0 && camp.showTargetReachInChart && <ReferenceLine y={camp.targetReach} stroke="#7D1AD7" strokeDasharray="4 4" label={{ value: 'Meta alcance', fill: '#7D1AD7', fontSize: 10 }} />}
+                              {camp.targetInteractions > 0 && camp.showTargetInteractionsInChart && <ReferenceLine y={camp.targetInteractions} stroke="#00C853" strokeDasharray="4 4" label={{ value: 'Meta interações', fill: '#00C853', fontSize: 10 }} />}
                               <Line type="monotone" dataKey="reach" name="Alcance" stroke="#7D1AD7" strokeWidth={2} dot={{ r: 3 }} />
                               <Line type="monotone" dataKey="interactions" name="Interações" stroke="#00C853" strokeWidth={2} dot={{ r: 3 }} />
                             </LineChart>

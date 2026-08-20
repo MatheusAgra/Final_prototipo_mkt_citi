@@ -4,7 +4,7 @@ import { prisma } from '../prisma.js'
 import { ApiError, asyncRoute } from '../http.js'
 import { authenticate, managerOnly } from '../auth.js'
 
-const campaignBodyBase = z.object({ nome: z.string().trim().min(1), status: z.enum(['ATIVA','PLANEJADA','ENCERRADA']), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), alcanceMeta: z.number().int().min(0), interacoesMeta: z.number().int().min(0), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
+const campaignBodyBase = z.object({ nome: z.string().trim().min(1), status: z.enum(['ATIVA','PLANEJADA','ENCERRADA']), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), alcanceMeta: z.number().int().min(0), interacoesMeta: z.number().int().min(0), alcanceMetaGrafico: z.boolean().default(true), interacoesMetaGrafico: z.boolean().default(true), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
 // .partial() não é suportado em schemas com .refine() (Zod v4) — o PATCH usa campaignBodyBase.partial() e valida a ordem das datas manualmente após o parse
 const campaignBody = campaignBodyBase.refine((value) => value.dataFim >= value.dataInicio, { message: 'dataFim deve ser posterior à dataInicio' })
 const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const } } } as const

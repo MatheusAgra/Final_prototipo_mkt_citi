@@ -1081,7 +1081,8 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
               )}
               {form.local === 'meet' && (
                 <div className="mt-2">
-                  <Inp value={form.linkMeet} onChange={(v) => setForm((f) => ({ ...f, linkMeet: v }))} placeholder="Ex: https://meet.google.com/abc-defg-hij" />
+                  <Inp value={form.linkMeet} onChange={(v) => setForm((f) => ({ ...f, linkMeet: v }))} placeholder="Link do Meet (opcional)" />
+                  <p className="text-xs text-[#555566] mt-1">Deixe em branco para o Google gerar uma sala nova automaticamente (com o botão "Entrar com o Google Meet" no convite).</p>
                 </div>
               )}
             </FormField>

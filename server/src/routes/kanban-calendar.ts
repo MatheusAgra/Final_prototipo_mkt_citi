@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { ApiError, asyncRoute } from '../http.js'
 import { authenticate } from '../auth.js'
-import { createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from '../calendar-google.js'
+import { createGoogleEvent, updateGoogleEvent, deleteGoogleEvent, type GoogleEventResult } from '../calendar-google.js'
 
 const assignment = z.object({ userId: z.string().uuid(), nota: z.number().min(0).max(5).nullable().optional() })
 const taskFields = z.object({ titulo: z.string().trim().min(1), redeSocial: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']), dificuldade: z.enum(['FACIL','MEDIO','DIFICIL']), dataInicio: z.coerce.date().nullable().optional(), dataEntrega: z.coerce.date().nullable().optional(), colunaId: z.string().uuid(), responsaveis: z.array(assignment).default([]) })
@@ -82,12 +82,23 @@ const googleInput = (event: any) => ({
   horario: event.horario,
   horarioFim: event.horarioFim,
   attendeeEmails: event.participantes.map((p: any) => p.user.email),
-  location: event.formatoLocal === 'PRESENCIAL' ? event.sala ?? undefined : event.formatoLocal === 'MEET' ? (event.linkMeet ?? 'Google Meet') : undefined,
+  location: event.formatoLocal === 'PRESENCIAL' ? event.sala ?? undefined : event.formatoLocal === 'MEET' ? (event.linkMeet ?? undefined) : undefined,
+  // Sem link colado pelo usuário: pede pro Google gerar uma sala de Meet de verdade, o que dá o botão
+  // nativo "Entrar com o Google Meet" no Calendar (um link colado manualmente nunca ganha esse botão —
+  // só aparece como texto em "local", limitação do próprio Google).
+  autoGenerateMeet: event.formatoLocal === 'MEET' && !event.linkMeet,
 })
 async function refreshTokenFor(userId: string | null): Promise<string | null> {
   if (!userId) return null
   const account = await prisma.googleAccount.findUnique({ where: { userId } })
   return account?.refreshToken ?? null
+}
+async function persistGoogleResult(eventId: string, event: any, result: GoogleEventResult) {
+  const data: { googleEventId?: string; linkMeet?: string } = {}
+  if (result.id) data.googleEventId = result.id
+  if (event.formatoLocal === 'MEET' && !event.linkMeet && result.meetLink) data.linkMeet = result.meetLink
+  if (Object.keys(data).length === 0) return event
+  return prisma.calendarEvent.update({ where: { id: eventId }, data, include: eventInclude })
 }
 calendarRouter.post('/events', asyncRoute(async (req, res) => {
   const body = normalizeSala(eventBody.parse(req.body))
@@ -97,8 +108,8 @@ calendarRouter.post('/events', asyncRoute(async (req, res) => {
   let event = await prisma.calendarEvent.create({ data: { ...data, criadorId: req.user!.id, participantes: { create: participantIds.map((userId) => ({ userId })) } }, include: eventInclude })
   const refreshToken = await refreshTokenFor(req.user!.id)
   if (refreshToken) {
-    const googleEventId = await createGoogleEvent(refreshToken, googleInput(event))
-    if (googleEventId) event = await prisma.calendarEvent.update({ where: { id: event.id }, data: { googleEventId }, include: eventInclude })
+    const result = await createGoogleEvent(refreshToken, googleInput(event))
+    event = await persistGoogleResult(event.id, event, result)
   }
   res.status(201).json(serializeEvent(event,req.user!.perfil==='GERENTE'))
 }))
@@ -121,12 +132,10 @@ calendarRouter.patch('/events/:id', asyncRoute(async (req, res) => {
   // Ao "adotar" um evento sem criador, o googleEventId antigo pode pertencer à conta de outra pessoa
   // (ex.: era da conta compartilhada usada antes da conexão por usuário) — trata como sincronização nova.
   if (refreshToken) {
-    if (existing.googleEventId && !adoptingCreator) {
-      await updateGoogleEvent(refreshToken, existing.googleEventId, googleInput(event))
-    } else {
-      const googleEventId = await createGoogleEvent(refreshToken, googleInput(event))
-      if (googleEventId) event = await prisma.calendarEvent.update({ where: { id: event.id }, data: { googleEventId }, include: eventInclude })
-    }
+    const result = existing.googleEventId && !adoptingCreator
+      ? await updateGoogleEvent(refreshToken, existing.googleEventId, googleInput(event))
+      : await createGoogleEvent(refreshToken, googleInput(event))
+    event = await persistGoogleResult(event.id, event, result)
   }
   res.json(serializeEvent(event,req.user!.perfil==='GERENTE'))
 }))

@@ -1170,7 +1170,7 @@ const statusStyle = {
   planejada: { label: 'Planejada', bg: 'rgba(125,26,215,0.08)', color: '#7D1AD7' },
   encerrada: { label: 'Encerrada', bg: 'rgba(255,255,255,0.06)', color: '#8A8A9A' },
 }
-const GOAL_COLORS = ['#7D1AD7', '#00C853', '#FFB300', '#00E5C8', '#E1306C', '#507AE6']
+const GOAL_COLORS = ['#7D1AD7', '#00C853', '#FFB300', '#00E5C8', '#E1306C', '#507AE6', '#FF5252', '#40C4FF']
 
 function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: (c: Channel) => void }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
@@ -1368,8 +1368,14 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const alcanceGoal = camp.goals.find((g) => g.name.trim().toLowerCase() === 'alcance')
             const interacoesGoal = camp.goals.find((g) => ['interações', 'interacoes'].includes(g.name.trim().toLowerCase()))
             const otherGoals = camp.goals.filter((g) => g !== alcanceGoal && g !== interacoesGoal)
+            const chartSeries = ['reach', 'interactions', ...otherGoals.map((g) => g.name)]
+            const colorFor = (key: string) => GOAL_COLORS[Math.max(0, chartSeries.indexOf(key)) % GOAL_COLORS.length]
+            const goalKey = (g: CampaignGoal) => (g === alcanceGoal ? 'reach' : g === interacoesGoal ? 'interactions' : g.name)
+            // 0 significa "não preenchido" nesse registro — não plotamos o ponto para não sugerir que o valor real foi zero
             const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => {
-              const row: Record<string, string | number> = { date: e.date.slice(5), reach: e.reach, interactions: e.interactions }
+              const row: Record<string, string | number> = { date: e.date.slice(5) }
+              if (e.reach !== 0) row.reach = e.reach
+              if (e.interactions !== 0) row.interactions = e.interactions
               for (const v of e.values) row[v.name] = v.value
               return row
             })
@@ -1540,13 +1546,13 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
                               <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
                                 formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
-                              {camp.goals.filter((g) => g.showInChart).map((g, i) => (
-                                <ReferenceLine key={g.id} y={g.value} stroke={GOAL_COLORS[i % GOAL_COLORS.length]} strokeDasharray="4 4" label={{ value: `Meta ${g.name}`, fill: GOAL_COLORS[i % GOAL_COLORS.length], fontSize: 10 }} />
+                              {camp.goals.filter((g) => g.showInChart).map((g) => (
+                                <ReferenceLine key={g.id} y={g.value} stroke={colorFor(goalKey(g))} strokeDasharray="4 4" label={{ value: `Meta ${g.name}`, fill: colorFor(goalKey(g)), fontSize: 10 }} />
                               ))}
-                              <Line type="monotone" dataKey="reach" name="Alcance" stroke="#7D1AD7" strokeWidth={2} dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="interactions" name="Interações" stroke="#00C853" strokeWidth={2} dot={{ r: 3 }} />
-                              {otherGoals.filter((g) => g.showInChart).map((g, i) => (
-                                <Line key={g.id} type="monotone" dataKey={g.name} name={g.name} stroke={GOAL_COLORS[i % GOAL_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                              <Line type="monotone" dataKey="reach" name="Alcance" stroke={colorFor('reach')} strokeWidth={2} dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="interactions" name="Interações" stroke={colorFor('interactions')} strokeWidth={2} dot={{ r: 3 }} />
+                              {otherGoals.filter((g) => g.showInChart).map((g) => (
+                                <Line key={g.id} type="monotone" dataKey={g.name} name={g.name} stroke={colorFor(g.name)} strokeWidth={2} dot={{ r: 3 }} />
                               ))}
                             </LineChart>
                           </ResponsiveContainer>

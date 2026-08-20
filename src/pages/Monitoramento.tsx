@@ -1566,10 +1566,10 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                             <div key={entry.date} className="flex items-center justify-between px-3 py-2 text-xs group"
                               style={{ background: i % 2 === 0 ? '#202024' : '#17171A', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
                               <span style={{ color: '#8A8A9A' }}>{entry.date}</span>
-                              <span style={{ color: '#7D1AD7' }}>Alcance: {entry.reach.toLocaleString('pt-BR')}</span>
-                              <span style={{ color: '#00C853' }}>Interações: {entry.interactions.toLocaleString('pt-BR')}</span>
+                              <span style={{ color: colorFor('reach') }}>Alcance: {entry.reach.toLocaleString('pt-BR')}</span>
+                              <span style={{ color: colorFor('interactions') }}>Interações: {entry.interactions.toLocaleString('pt-BR')}</span>
                               {entry.values.map((v) => (
-                                <span key={v.name} style={{ color: '#507AE6' }}>{v.name}: {v.value.toLocaleString('pt-BR')}</span>
+                                <span key={v.name} style={{ color: colorFor(v.name) }}>{v.name}: {v.value.toLocaleString('pt-BR')}</span>
                               ))}
                               <div className="flex items-center gap-1.5">
                                 <button onClick={() => toggleEntryInChart(camp.id, entry)}

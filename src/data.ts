@@ -43,12 +43,18 @@ export interface KanbanColumn {
   tasks: Task[]
 }
 
+export interface CampaignMetricValue {
+  name: string
+  value: number
+}
+
 export interface CampaignMetricEntry {
   id?: string
   date: string
   reach: number
   interactions: number
   showInChart: boolean
+  values: CampaignMetricValue[]
 }
 
 export interface CampaignGoal {

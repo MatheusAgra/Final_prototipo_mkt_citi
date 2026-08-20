@@ -261,16 +261,29 @@ model CampaignChannel {
 }
 
 model CampaignDailyMetric {
-  id             String   @id @default(uuid())
+  id             String                @id @default(uuid())
   campaignId     String
   data           DateTime
-  alcance        Int      @default(0)
-  interacoes     Int      @default(0)
-  mostrarGrafico Boolean  @default(true)
-  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  alcance        Int                   @default(0)
+  interacoes     Int                   @default(0)
+  mostrarGrafico Boolean               @default(true)
+  campaign       Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  valores        CampaignMetricValue[]
 
   @@unique([campaignId, data])
   @@index([campaignId, data])
+}
+
+// Valor, em uma data específica, de uma meta/insight personalizado (ex.: CTR, Leads) — permite
+// plotar a evolução daquele insight ao longo do tempo no gráfico de métricas diárias.
+model CampaignMetricValue {
+  id            String              @id @default(uuid())
+  dailyMetricId String
+  nome          String
+  valor         Float
+  dailyMetric   CampaignDailyMetric @relation(fields: [dailyMetricId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyMetricId, nome])
 }
 
 model TeamEngagement {

@@ -19,7 +19,7 @@ const campaignGoalBody = z.object({ nome: z.string().trim().min(1), valor: z.num
 export const campaignsRouter = Router(); campaignsRouter.use(authenticate)
 campaignsRouter.get('/', asyncRoute(async (req, res) => {
   const q = z.object({ ordenar: z.enum(['alcance','interacao']).optional(), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).optional() }).parse(req.query)
-  let rows = (await prisma.campaign.findMany({ where: q.canal ? { canais: { some: { canal: q.canal } } } : {}, include: campaignInclude, orderBy: { dataInicio: 'desc' } })).map(serializeCampaign)
+  let rows = (await prisma.campaign.findMany({ where: q.canal ? { canais: { some: { canal: q.canal } } } : {}, include: campaignInclude, orderBy: { createdAt: 'desc' } })).map(serializeCampaign)
   if (q.ordenar === 'alcance') rows.sort((a,b) => b.alcanceAtual-a.alcanceAtual); if (q.ordenar === 'interacao') rows.sort((a,b) => b.interacoesAtual-a.interacoesAtual)
   res.json(rows)
 }))

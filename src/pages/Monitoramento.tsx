@@ -1205,7 +1205,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
       canais: (form.channels.length ? form.channels : (['instagram'] as ChannelType[])).map((ch) => CHANNEL_TO_API[ch]),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
-    setCampaigns((prev) => [...prev, mapCampaign(created)])
+    setCampaigns((prev) => [mapCampaign(created), ...prev])
     setShowForm(false)
     setForm(emptyCampaignForm)
   }

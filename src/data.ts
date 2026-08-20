@@ -48,6 +48,7 @@ export interface CampaignMetricEntry {
   date: string
   reach: number
   interactions: number
+  showInChart: boolean
 }
 
 export interface Campaign {

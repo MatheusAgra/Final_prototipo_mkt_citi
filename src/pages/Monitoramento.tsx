@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings,
+  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings, Eye, EyeOff,
   Clock, Flame, Trash2, BarChart2, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import {
@@ -57,7 +57,7 @@ function mapCampaign(row: any): Campaign {
     targetInteractions: row.interacoesMeta,
     status: row.status.toLowerCase() as CampaignStatus,
     daysRunning: row.diasNoAr,
-    dailyEntries: (row.metricasDiarias ?? []).map((m: any) => ({ id: m.id, date: String(m.data).slice(0, 10), reach: m.alcance, interactions: m.interacoes })),
+    dailyEntries: (row.metricasDiarias ?? []).map((m: any) => ({ id: m.id, date: String(m.data).slice(0, 10), reach: m.alcance, interactions: m.interacoes, showInChart: m.mostrarGrafico ?? true })),
   }
 }
 
@@ -1176,7 +1176,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
-  const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string }>>({})
+  const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; showInChart: boolean }>>({})
   const [form, setForm] = useState({ name: '', objective: '', audience: '', startDate: '', endDate: '', targetReach: '', targetInteractions: '', channels: [] as ChannelType[] })
 
   function reload() {
@@ -1199,8 +1199,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
       publico: form.audience.trim() || 'Não definido',
       dataInicio: form.startDate || new Date().toISOString().slice(0, 10),
       dataFim: form.endDate || new Date().toISOString().slice(0, 10),
-      alcanceMeta: parseInt(form.targetReach) || 10000,
-      interacoesMeta: parseInt(form.targetInteractions) || 500,
+      alcanceMeta: parseInt(form.targetReach) || 0,
+      interacoesMeta: parseInt(form.targetInteractions) || 0,
       canais: (form.channels.length ? form.channels : (['instagram'] as ChannelType[])).map((ch) => CHANNEL_TO_API[ch]),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
@@ -1217,8 +1217,13 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   async function addMetricEntry(campId: string) {
     const mf = metricForms[campId]
     if (!mf?.date) return
-    await api.campaigns.addMetric(campId, { data: mf.date, alcance: parseInt(mf.reach) || 0, interacoes: parseInt(mf.interactions) || 0 }).catch(console.error)
-    setMetricForms((prev) => ({ ...prev, [campId]: { date: '', reach: '', interactions: '' } }))
+    await api.campaigns.addMetric(campId, { data: mf.date, alcance: parseInt(mf.reach) || 0, interacoes: parseInt(mf.interactions) || 0, mostrarGrafico: mf.showInChart ?? true }).catch(console.error)
+    setMetricForms((prev) => ({ ...prev, [campId]: { date: '', reach: '', interactions: '', showInChart: true } }))
+    reload()
+  }
+
+  async function toggleEntryInChart(campId: string, entry: CampaignMetricEntry) {
+    await api.campaigns.addMetric(campId, { data: entry.date, alcance: entry.reach, interacoes: entry.interactions, mostrarGrafico: !entry.showInChart }).catch(console.error)
     reload()
   }
 
@@ -1256,8 +1261,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
               <div className="col-span-2"><FormField label="Público-alvo"><Inp value={form.audience} onChange={(v) => setForm((f) => ({ ...f, audience: v }))} placeholder="Gerentes de marketing B2B" /></FormField></div>
               <FormField label="Início"><Inp type="date" value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></FormField>
               <FormField label="Término"><Inp type="date" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></FormField>
-              <FormField label="Meta de alcance"><Inp type="number" value={form.targetReach} onChange={(v) => setForm((f) => ({ ...f, targetReach: v }))} placeholder="50000" /></FormField>
-              <FormField label="Meta de interações"><Inp type="number" value={form.targetInteractions} onChange={(v) => setForm((f) => ({ ...f, targetInteractions: v }))} placeholder="3000" /></FormField>
+              <FormField label="Meta de alcance (opcional)"><Inp type="number" value={form.targetReach} onChange={(v) => setForm((f) => ({ ...f, targetReach: v }))} placeholder="Sem meta definida" /></FormField>
+              <FormField label="Meta de interações (opcional)"><Inp type="number" value={form.targetInteractions} onChange={(v) => setForm((f) => ({ ...f, targetInteractions: v }))} placeholder="Sem meta definida" /></FormField>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-[#8A8A9A] mb-2">Canais</label>
                 <div className="flex gap-2 flex-wrap">
@@ -1282,8 +1287,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
           {filtered.map((camp) => {
             const st = statusStyle[camp.status]
             const expanded = expandedMetrics[camp.id]
-            const mf = metricForms[camp.id] ?? { date: '', reach: '', interactions: '' }
-            const chartData = camp.dailyEntries.map((e) => ({
+            const mf = metricForms[camp.id] ?? { date: '', reach: '', interactions: '', showInChart: true }
+            const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => ({
               date: e.date.slice(5), reach: e.reach, interactions: e.interactions,
             }))
 
@@ -1315,12 +1320,16 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
                 </div>
 
-                {camp.status !== 'planejada' && (
+                {camp.status !== 'planejada' && (camp.targetReach > 0 || camp.targetInteractions > 0) && (
                   <div className="grid grid-cols-2 gap-6 mb-4">
-                    <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> Alcance</div>
-                      <ProgressBar value={camp.reach} target={camp.targetReach} color="#7D1AD7" /></div>
-                    <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><BarChart2 size={11} /> Interações</div>
-                      <ProgressBar value={camp.interactions} target={camp.targetInteractions} color="#00C853" /></div>
+                    {camp.targetReach > 0 && (
+                      <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> Alcance</div>
+                        <ProgressBar value={camp.reach} target={camp.targetReach} color="#7D1AD7" /></div>
+                    )}
+                    {camp.targetInteractions > 0 && (
+                      <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><BarChart2 size={11} /> Interações</div>
+                        <ProgressBar value={camp.interactions} target={camp.targetInteractions} color="#00C853" /></div>
+                    )}
                   </div>
                 )}
 
@@ -1356,6 +1365,11 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                           <Plus size={12} /> Registrar
                         </button>
                       </div>
+                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
+                        <input type="checkbox" checked={mf.showInChart} onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, showInChart: e.target.checked } }))}
+                          className="accent-[#7D1AD7]" />
+                        Mostrar este registro no gráfico de métricas diárias
+                      </label>
 
                       {/* Chart */}
                       {chartData.length > 0 && (
@@ -1367,7 +1381,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
                               <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
                                 formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
-                              <ReferenceLine y={camp.targetReach} stroke="#7D1AD7" strokeDasharray="4 4" label={{ value: 'Meta alcance', fill: '#7D1AD7', fontSize: 10 }} />
+                              {camp.targetReach > 0 && <ReferenceLine y={camp.targetReach} stroke="#7D1AD7" strokeDasharray="4 4" label={{ value: 'Meta alcance', fill: '#7D1AD7', fontSize: 10 }} />}
                               <Line type="monotone" dataKey="reach" name="Alcance" stroke="#7D1AD7" strokeWidth={2} dot={{ r: 3 }} />
                               <Line type="monotone" dataKey="interactions" name="Interações" stroke="#00C853" strokeWidth={2} dot={{ r: 3 }} />
                             </LineChart>
@@ -1384,9 +1398,17 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <span style={{ color: '#8A8A9A' }}>{entry.date}</span>
                               <span style={{ color: '#7D1AD7' }}>Alcance: {entry.reach.toLocaleString('pt-BR')}</span>
                               <span style={{ color: '#00C853' }}>Interações: {entry.interactions.toLocaleString('pt-BR')}</span>
-                              <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)} className="opacity-0 group-hover:opacity-100 text-[#FF5252] hover:text-[#FF5252]">
-                                <Trash2 size={12} />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => toggleEntryInChart(camp.id, entry)}
+                                  className="opacity-0 group-hover:opacity-100 transition-all"
+                                  style={{ color: entry.showInChart ? '#7D1AD7' : '#555566' }}
+                                  title={entry.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
+                                  {entry.showInChart ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
+                                <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)} className="opacity-0 group-hover:opacity-100 text-[#FF5252] hover:text-[#FF5252]">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>

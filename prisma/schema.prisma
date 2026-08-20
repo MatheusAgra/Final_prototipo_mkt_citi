@@ -248,12 +248,13 @@ model CampaignChannel {
 }
 
 model CampaignDailyMetric {
-  id         String   @id @default(uuid())
-  campaignId String
-  data       DateTime
-  alcance    Int      @default(0)
-  interacoes Int      @default(0)
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  campaignId     String
+  data           DateTime
+  alcance        Int      @default(0)
+  interacoes     Int      @default(0)
+  mostrarGrafico Boolean  @default(true)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, data])
   @@index([campaignId, data])

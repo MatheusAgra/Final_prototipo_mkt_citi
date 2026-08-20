@@ -51,6 +51,13 @@ export interface CampaignMetricEntry {
   showInChart: boolean
 }
 
+export interface CampaignGoal {
+  id: string
+  name: string
+  value: number
+  showInChart: boolean
+}
+
 export interface Campaign {
   id: string
   name: string
@@ -60,11 +67,8 @@ export interface Campaign {
   startDate: string
   endDate: string
   reach: number
-  targetReach: number
-  showTargetReachInChart: boolean
   interactions: number
-  targetInteractions: number
-  showTargetInteractionsInChart: boolean
+  goals: CampaignGoal[]
   status: CampaignStatus
   daysRunning: number
   dailyEntries: CampaignMetricEntry[]

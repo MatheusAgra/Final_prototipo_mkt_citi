@@ -4,16 +4,17 @@ import { prisma } from '../prisma.js'
 import { ApiError, asyncRoute } from '../http.js'
 import { authenticate, managerOnly } from '../auth.js'
 
-const campaignBodyBase = z.object({ nome: z.string().trim().min(1), status: z.enum(['ATIVA','PLANEJADA','ENCERRADA']), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), alcanceMeta: z.number().int().min(0), interacoesMeta: z.number().int().min(0), alcanceMetaGrafico: z.boolean().default(true), interacoesMetaGrafico: z.boolean().default(true), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
+const campaignBodyBase = z.object({ nome: z.string().trim().min(1), status: z.enum(['ATIVA','PLANEJADA','ENCERRADA']), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
 // .partial() não é suportado em schemas com .refine() (Zod v4) — o PATCH usa campaignBodyBase.partial() e valida a ordem das datas manualmente após o parse
 const campaignBody = campaignBodyBase.refine((value) => value.dataFim >= value.dataInicio, { message: 'dataFim deve ser posterior à dataInicio' })
-const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const } } } as const
+const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const } }, metas: { orderBy: { ordem: 'asc' as const } } } as const
 const serializeCampaign = (campaign: any) => {
   const alcanceAtual = campaign.metricasDiarias.reduce((sum: number, metric: any) => sum + metric.alcance, 0)
   const interacoesAtual = campaign.metricasDiarias.reduce((sum: number, metric: any) => sum + metric.interacoes, 0)
   const end = Math.min(Date.now(), new Date(campaign.dataFim).getTime())
-  return { ...campaign, canais: campaign.canais.map((entry: any) => entry.canal), alcanceAtual, interacoesAtual, progressoAlcance: campaign.alcanceMeta ? Math.min(1, alcanceAtual / campaign.alcanceMeta) : 0, progressoInteracoes: campaign.interacoesMeta ? Math.min(1, interacoesAtual / campaign.interacoesMeta) : 0, diasNoAr: Math.max(0, Math.floor((end - new Date(campaign.dataInicio).getTime()) / 86400000)), totalRegistrosMetricas: campaign.metricasDiarias.length }
+  return { ...campaign, canais: campaign.canais.map((entry: any) => entry.canal), alcanceAtual, interacoesAtual, diasNoAr: Math.max(0, Math.floor((end - new Date(campaign.dataInicio).getTime()) / 86400000)), totalRegistrosMetricas: campaign.metricasDiarias.length }
 }
+const campaignGoalBody = z.object({ nome: z.string().trim().min(1), valor: z.number().min(0), mostrarGrafico: z.boolean().default(true) })
 
 export const campaignsRouter = Router(); campaignsRouter.use(authenticate)
 campaignsRouter.get('/', asyncRoute(async (req, res) => {
@@ -28,6 +29,21 @@ campaignsRouter.delete('/:id',asyncRoute(async(req,res)=>{await prisma.campaign.
 campaignsRouter.get('/:id/metrics',asyncRoute(async(req,res)=>res.json(await prisma.campaignDailyMetric.findMany({where:{campaignId:String(req.params.id)},orderBy:{data:'asc'}}))))
 campaignsRouter.post('/:id/metrics',asyncRoute(async(req,res)=>{if(!await prisma.campaign.findUnique({where:{id:String(req.params.id)}}))throw new ApiError(404,'NOT_FOUND');const body=z.object({data:z.coerce.date(),alcance:z.number().int().min(0),interacoes:z.number().int().min(0),mostrarGrafico:z.boolean().default(true)}).parse(req.body);const metric=await prisma.campaignDailyMetric.upsert({where:{campaignId_data:{campaignId:String(req.params.id),data:body.data}},create:{campaignId:String(req.params.id),...body},update:{alcance:body.alcance,interacoes:body.interacoes,mostrarGrafico:body.mostrarGrafico}});res.status(201).json(metric)}))
 campaignsRouter.delete('/:id/metrics/:metricId',asyncRoute(async(req,res)=>{await prisma.campaignDailyMetric.delete({where:{id:String(req.params.metricId)}});res.status(204).send()}))
+
+// Metas de campanha: livres, quantas a pessoa quiser, cada uma com um nome escolhido por ela (Alcance,
+// Interações, CTR, o que for relevante para aquela campanha específica).
+campaignsRouter.post('/:id/goals',asyncRoute(async(req,res)=>{
+  if(!await prisma.campaign.findUnique({where:{id:String(req.params.id)}}))throw new ApiError(404,'NOT_FOUND')
+  const body=campaignGoalBody.parse(req.body)
+  const max=await prisma.campaignGoal.aggregate({where:{campaignId:String(req.params.id)},_max:{ordem:true}})
+  const goal=await prisma.campaignGoal.create({data:{campaignId:String(req.params.id),...body,ordem:(max._max.ordem??-1)+1}})
+  res.status(201).json(goal)
+}))
+campaignsRouter.patch('/:id/goals/:goalId',asyncRoute(async(req,res)=>{
+  const body=campaignGoalBody.partial().parse(req.body)
+  res.json(await prisma.campaignGoal.update({where:{id:String(req.params.goalId)},data:body}))
+}))
+campaignsRouter.delete('/:id/goals/:goalId',asyncRoute(async(req,res)=>{await prisma.campaignGoal.delete({where:{id:String(req.params.goalId)}});res.status(204).send()}))
 
 export const engagementRouter = Router(); engagementRouter.use(authenticate,managerOnly)
 const monthBounds=(period:string)=>{if(!/^\d{4}-\d{2}$/.test(period))throw new ApiError(422,'INVALID_PERIOD');const start=new Date(`${period}-01T00:00:00.000Z`);const end=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,1));return{start,end}}

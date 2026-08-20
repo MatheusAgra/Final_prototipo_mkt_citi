@@ -226,17 +226,28 @@ model Campaign {
   publico         String
   dataInicio      DateTime
   dataFim         DateTime
-  alcanceMeta     Int                   @default(0)
-  interacoesMeta  Int                   @default(0)
-  alcanceMetaGrafico    Boolean         @default(true)
-  interacoesMetaGrafico Boolean         @default(true)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   canais          CampaignChannel[]
   metricasDiarias CampaignDailyMetric[]
+  metas           CampaignGoal[]
   posts           Post[]
 
   @@index([status, dataInicio])
+}
+
+// Metas de campanha são livres: a pessoa escolhe o nome do insight (Alcance, Interações, CTR, o que for)
+// e decide se aquela meta específica aparece como linha de referência no gráfico de métricas diárias.
+model CampaignGoal {
+  id             String   @id @default(uuid())
+  campaignId     String
+  nome           String
+  valor          Float
+  mostrarGrafico Boolean  @default(true)
+  ordem          Int      @default(0)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
 }
 
 model CampaignChannel {

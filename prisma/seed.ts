@@ -125,7 +125,7 @@ async function main() {
       objetivo: 'Gerar awareness e leads para o novo produto da empresa',
       publico: 'Marketing managers e C-level de empresas B2B com 50+ funcionários',
       dataInicio: new Date('2026-07-01'), dataFim: new Date('2026-08-31'),
-      alcanceMeta: 50000, interacoesMeta: 3000,
+      metas: [{ nome: 'Alcance', valor: 50000, ordem: 0 }, { nome: 'Interações', valor: 3000, ordem: 1 }],
       canais: ['INSTAGRAM', 'LINKEDIN'] as const,
       dailyEntries: [
         { data: new Date('2026-07-05'), alcance: 4200, interacoes: 180 },
@@ -140,7 +140,7 @@ async function main() {
       objetivo: 'Converter leads qualificados com oferta especial de final de ano',
       publico: 'Leads na base com score > 60, segmento PME',
       dataInicio: new Date('2026-11-01'), dataFim: new Date('2026-11-30'),
-      alcanceMeta: 100000, interacoesMeta: 8000,
+      metas: [{ nome: 'Alcance', valor: 100000, ordem: 0 }, { nome: 'Interações', valor: 8000, ordem: 1 }],
       canais: ['INSTAGRAM', 'EMAIL'] as const,
       dailyEntries: [],
     },
@@ -149,7 +149,7 @@ async function main() {
       objetivo: 'Construir autoridade de marca e gerar MQLs qualificados',
       publico: 'Decision makers em tech e serviços financeiros',
       dataInicio: new Date('2026-06-15'), dataFim: new Date('2026-08-15'),
-      alcanceMeta: 20000, interacoesMeta: 1000,
+      metas: [{ nome: 'Alcance', valor: 20000, ordem: 0 }, { nome: 'Interações', valor: 1000, ordem: 1 }],
       canais: ['LINKEDIN', 'SITE'] as const,
       dailyEntries: [
         { data: new Date('2026-06-20'), alcance: 2100, interacoes: 95 },
@@ -161,7 +161,7 @@ async function main() {
       ],
     },
   ]
-  for (const { canais, dailyEntries, ...data } of campaignsSeed) {
+  for (const { canais, dailyEntries, metas, ...data } of campaignsSeed) {
     const existing = await prisma.campaign.findFirst({ where: { nome: data.nome } })
     if (existing) continue
     await prisma.campaign.create({
@@ -169,6 +169,7 @@ async function main() {
         ...data,
         canais: { create: canais.map((canal) => ({ canal })) },
         metricasDiarias: { create: dailyEntries },
+        metas: { create: metas },
       },
     })
   }

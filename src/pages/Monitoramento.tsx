@@ -8,7 +8,7 @@ import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
 } from 'recharts'
 import type { Profile, Channel } from '../App'
-import type { KanbanColumn, Task, TaskAssignee, ChannelType, Campaign, CampaignStatus, CalendarEvent, CampaignMetricEntry } from '../data'
+import type { KanbanColumn, Task, TaskAssignee, ChannelType, Campaign, CampaignStatus, CalendarEvent, CampaignMetricEntry, CampaignGoal } from '../data'
 import { type Difficulty } from '../data'
 import { api } from '../api'
 import BrandMark from '../BrandMark'
@@ -52,11 +52,8 @@ function mapCampaign(row: any): Campaign {
     startDate: String(row.dataInicio).slice(0, 10),
     endDate: String(row.dataFim).slice(0, 10),
     reach: row.alcanceAtual,
-    targetReach: row.alcanceMeta,
-    showTargetReachInChart: row.alcanceMetaGrafico ?? true,
     interactions: row.interacoesAtual,
-    targetInteractions: row.interacoesMeta,
-    showTargetInteractionsInChart: row.interacoesMetaGrafico ?? true,
+    goals: (row.metas ?? []).map((g: any) => ({ id: g.id, name: g.nome, value: g.valor, showInChart: g.mostrarGrafico })),
     status: row.status.toLowerCase() as CampaignStatus,
     daysRunning: row.diasNoAr,
     dailyEntries: (row.metricasDiarias ?? []).map((m: any) => ({ id: m.id, date: String(m.data).slice(0, 10), reach: m.alcance, interactions: m.interacoes, showInChart: m.mostrarGrafico ?? true })),
@@ -1173,13 +1170,16 @@ const statusStyle = {
   planejada: { label: 'Planejada', bg: 'rgba(125,26,215,0.08)', color: '#7D1AD7' },
   encerrada: { label: 'Encerrada', bg: 'rgba(255,255,255,0.06)', color: '#8A8A9A' },
 }
+const GOAL_COLORS = ['#7D1AD7', '#00C853', '#FFB300', '#00E5C8', '#E1306C', '#507AE6']
 
 function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: (c: Channel) => void }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
   const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; showInChart: boolean }>>({})
-  const emptyCampaignForm = { name: '', objective: '', audience: '', startDate: '', endDate: '', channels: [] as ChannelType[], createGoal: false, targetReach: '', showTargetReachInChart: true, targetInteractions: '', showTargetInteractionsInChart: true }
+  const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({})
+  const [goalForms, setGoalForms] = useState<Record<string, { name: string; value: string; showInChart: boolean }>>({})
+  const emptyCampaignForm = { name: '', objective: '', audience: '', startDate: '', endDate: '', channels: [] as ChannelType[] }
   const [form, setForm] = useState(emptyCampaignForm)
 
   function reload() {
@@ -1202,10 +1202,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
       publico: form.audience.trim() || 'Não definido',
       dataInicio: form.startDate || new Date().toISOString().slice(0, 10),
       dataFim: form.endDate || new Date().toISOString().slice(0, 10),
-      alcanceMeta: form.createGoal ? (parseInt(form.targetReach) || 0) : 0,
-      interacoesMeta: form.createGoal ? (parseInt(form.targetInteractions) || 0) : 0,
-      alcanceMetaGrafico: form.showTargetReachInChart,
-      interacoesMetaGrafico: form.showTargetInteractionsInChart,
       canais: (form.channels.length ? form.channels : (['instagram'] as ChannelType[])).map((ch) => CHANNEL_TO_API[ch]),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
@@ -1234,6 +1230,24 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
   async function deleteMetricEntry(campId: string, metricId: string) {
     await api.campaigns.removeMetric(campId, metricId).catch(console.error)
+    reload()
+  }
+
+  async function addGoal(campId: string) {
+    const gf = goalForms[campId]
+    if (!gf?.name.trim() || !gf.value) return
+    await api.campaigns.addGoal(campId, { nome: gf.name.trim(), valor: parseFloat(gf.value) || 0, mostrarGrafico: gf.showInChart ?? true }).catch(console.error)
+    setGoalForms((prev) => ({ ...prev, [campId]: { name: '', value: '', showInChart: true } }))
+    reload()
+  }
+
+  async function toggleGoalInChart(campId: string, goal: CampaignGoal) {
+    await api.campaigns.updateGoal(campId, goal.id, { mostrarGrafico: !goal.showInChart }).catch(console.error)
+    reload()
+  }
+
+  async function deleteGoal(campId: string, goalId: string) {
+    await api.campaigns.removeGoal(campId, goalId).catch(console.error)
     reload()
   }
 
@@ -1267,30 +1281,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
               <FormField label="Início"><Inp type="date" value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></FormField>
               <FormField label="Término"><Inp type="date" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></FormField>
               <div className="col-span-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-[#8A8A9A] mb-2 cursor-pointer w-fit">
-                  <input type="checkbox" checked={form.createGoal} onChange={(e) => setForm((f) => ({ ...f, createGoal: e.target.checked }))} className="accent-[#7D1AD7]" />
-                  Criar meta para esta campanha
-                </label>
-                {form.createGoal && (
-                  <div className="grid grid-cols-2 gap-4 rounded-xl p-4" style={{ background: '#202024', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div>
-                      <FormField label="Meta de alcance"><Inp type="number" value={form.targetReach} onChange={(v) => setForm((f) => ({ ...f, targetReach: v }))} placeholder="Ex: 50000" /></FormField>
-                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mt-2 cursor-pointer w-fit">
-                        <input type="checkbox" checked={form.showTargetReachInChart} onChange={(e) => setForm((f) => ({ ...f, showTargetReachInChart: e.target.checked }))} className="accent-[#7D1AD7]" />
-                        Mostrar no gráfico de métricas diárias
-                      </label>
-                    </div>
-                    <div>
-                      <FormField label="Meta de interações"><Inp type="number" value={form.targetInteractions} onChange={(v) => setForm((f) => ({ ...f, targetInteractions: v }))} placeholder="Ex: 3000" /></FormField>
-                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mt-2 cursor-pointer w-fit">
-                        <input type="checkbox" checked={form.showTargetInteractionsInChart} onChange={(e) => setForm((f) => ({ ...f, showTargetInteractionsInChart: e.target.checked }))} className="accent-[#7D1AD7]" />
-                        Mostrar no gráfico de métricas diárias
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="col-span-2">
                 <label className="block text-xs font-medium text-[#8A8A9A] mb-2">Canais</label>
                 <div className="flex gap-2 flex-wrap">
                   {(['instagram', 'linkedin', 'site', 'email'] as ChannelType[]).map((ch) => (
@@ -1315,6 +1305,11 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const st = statusStyle[camp.status]
             const expanded = expandedMetrics[camp.id]
             const mf = metricForms[camp.id] ?? { date: '', reach: '', interactions: '', showInChart: true }
+            const gf = goalForms[camp.id] ?? { name: '', value: '', showInChart: true }
+            const goalsExpanded = expandedGoals[camp.id]
+            const alcanceGoal = camp.goals.find((g) => g.name.trim().toLowerCase() === 'alcance')
+            const interacoesGoal = camp.goals.find((g) => ['interações', 'interacoes'].includes(g.name.trim().toLowerCase()))
+            const otherGoals = camp.goals.filter((g) => g !== alcanceGoal && g !== interacoesGoal)
             const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => ({
               date: e.date.slice(5), reach: e.reach, interactions: e.interactions,
             }))
@@ -1347,18 +1342,87 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
                 </div>
 
-                {camp.status !== 'planejada' && (camp.targetReach > 0 || camp.targetInteractions > 0) && (
-                  <div className="grid grid-cols-2 gap-6 mb-4">
-                    {camp.targetReach > 0 && (
+                {camp.status !== 'planejada' && (alcanceGoal || interacoesGoal) && (
+                  <div className="grid grid-cols-2 gap-6 mb-3">
+                    {alcanceGoal && (
                       <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> Alcance</div>
-                        <ProgressBar value={camp.reach} target={camp.targetReach} color="#7D1AD7" /></div>
+                        <ProgressBar value={camp.reach} target={alcanceGoal.value} color="#7D1AD7" /></div>
                     )}
-                    {camp.targetInteractions > 0 && (
+                    {interacoesGoal && (
                       <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><BarChart2 size={11} /> Interações</div>
-                        <ProgressBar value={camp.interactions} target={camp.targetInteractions} color="#00C853" /></div>
+                        <ProgressBar value={camp.interactions} target={interacoesGoal.value} color="#00C853" /></div>
                     )}
                   </div>
                 )}
+                {otherGoals.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {otherGoals.map((g) => (
+                      <span key={g.id} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(125,26,215,0.08)', color: '#507AE6' }}>
+                        <Target size={10} /> Meta {g.name}: {g.value.toLocaleString('pt-BR')}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Goals section */}
+                <div className="rounded-xl overflow-hidden mb-3" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <button onClick={() => setExpandedGoals((p) => ({ ...p, [camp.id]: !goalsExpanded }))}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-[#F0F0F5] hover:bg-[#202024] transition-colors">
+                    <span className="flex items-center gap-2"><Target size={14} className="text-[#7D1AD7]" /> Metas ({camp.goals.length})</span>
+                    <ChevronRight size={14} className="text-[#555566] transition-transform" style={{ transform: goalsExpanded ? 'rotate(90deg)' : 'none' }} />
+                  </button>
+                  {goalsExpanded && (
+                    <div className="px-4 pb-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="pt-3 pb-3 flex gap-3 items-end flex-wrap">
+                        <div className="flex-1 min-w-32">
+                          <label className="block text-xs text-[#8A8A9A] mb-1">Nome do insight</label>
+                          <input value={gf.name} onChange={(e) => setGoalForms((p) => ({ ...p, [camp.id]: { ...gf, name: e.target.value } }))}
+                            placeholder="Ex: CTR, Alcance, Leads..." className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
+                        </div>
+                        <div className="flex-1 min-w-24">
+                          <label className="block text-xs text-[#8A8A9A] mb-1">Valor da meta</label>
+                          <input type="number" value={gf.value} onChange={(e) => setGoalForms((p) => ({ ...p, [camp.id]: { ...gf, value: e.target.value } }))}
+                            placeholder="0" className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
+                        </div>
+                        <button onClick={() => addGoal(camp.id)} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
+                          style={{ background: '#7D1AD7' }}>
+                          <Plus size={12} /> Adicionar meta
+                        </button>
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
+                        <input type="checkbox" checked={gf.showInChart} onChange={(e) => setGoalForms((p) => ({ ...p, [camp.id]: { ...gf, showInChart: e.target.checked } }))}
+                          className="accent-[#7D1AD7]" />
+                        Mostrar esta meta no gráfico de métricas diárias
+                      </label>
+                      {camp.goals.length > 0 ? (
+                        <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                          {camp.goals.map((g, i) => (
+                            <div key={g.id} className="flex items-center justify-between px-3 py-2 text-xs"
+                              style={{ background: i % 2 === 0 ? '#202024' : '#17171A', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
+                              <span style={{ color: '#F0F0F5' }}>{g.name}</span>
+                              <span style={{ color: '#8A8A9A' }}>Meta: {g.value.toLocaleString('pt-BR')}</span>
+                              <div className="flex items-center gap-1.5">
+                                <button onClick={() => toggleGoalInChart(camp.id, g)}
+                                  className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
+                                  style={{ color: g.showInChart ? '#7D1AD7' : '#8A8A9A', background: g.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
+                                  title={g.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
+                                  {g.showInChart ? <Eye size={15} /> : <EyeOff size={15} />}
+                                </button>
+                                <button onClick={() => deleteGoal(camp.id, g.id)}
+                                  className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]"
+                                  title="Apagar meta">
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[#555566] text-center py-2">Nenhuma meta criada ainda</p>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Daily metrics section */}
                 <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -1408,8 +1472,9 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
                               <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
                                 formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
-                              {camp.targetReach > 0 && camp.showTargetReachInChart && <ReferenceLine y={camp.targetReach} stroke="#7D1AD7" strokeDasharray="4 4" label={{ value: 'Meta alcance', fill: '#7D1AD7', fontSize: 10 }} />}
-                              {camp.targetInteractions > 0 && camp.showTargetInteractionsInChart && <ReferenceLine y={camp.targetInteractions} stroke="#00C853" strokeDasharray="4 4" label={{ value: 'Meta interações', fill: '#00C853', fontSize: 10 }} />}
+                              {camp.goals.filter((g) => g.showInChart).map((g, i) => (
+                                <ReferenceLine key={g.id} y={g.value} stroke={GOAL_COLORS[i % GOAL_COLORS.length]} strokeDasharray="4 4" label={{ value: `Meta ${g.name}`, fill: GOAL_COLORS[i % GOAL_COLORS.length], fontSize: 10 }} />
+                              ))}
                               <Line type="monotone" dataKey="reach" name="Alcance" stroke="#7D1AD7" strokeWidth={2} dot={{ r: 3 }} />
                               <Line type="monotone" dataKey="interactions" name="Interações" stroke="#00C853" strokeWidth={2} dot={{ r: 3 }} />
                             </LineChart>

@@ -65,6 +65,22 @@ function timeRange(ev: CalendarEvent): string {
   return ev.endTime ? `${ev.time} - ${ev.endTime}` : ev.time
 }
 
+function AttendanceSummary({ event, compact=false }: { event: CalendarEvent; compact?: boolean }) {
+  const eligible = event.attendees.filter((attendee) => attendee.attendanceEligible)
+  const present = eligible.filter((attendee) => attendee.attendanceStatus === 'PRESENTE').length
+  const absent = eligible.filter((attendee) => attendee.attendanceStatus === 'AUSENTE').length
+  const late = eligible.filter((attendee) => attendee.attendanceStatus === 'ATRASADO').length
+  if (!event.attendanceConfirmed) return null
+  return (
+    <div className={`flex items-center ${compact ? 'gap-1 mt-1' : 'gap-2 mt-2 flex-wrap'}`} aria-label="Registro de presença confirmado">
+      <span className="inline-flex items-center gap-0.5 text-[#00C853]" title={`${present} presente(s)`}><Check size={compact ? 10 : 12} /><span className="text-[10px]">{present}</span></span>
+      <span className="inline-flex items-center gap-0.5 text-[#FF5252]" title={`${absent} ausente(s)`}><X size={compact ? 10 : 12} /><span className="text-[10px]">{absent}</span></span>
+      <span className="inline-flex items-center gap-0.5 text-[#FFB300]" title={`${late} atrasado(s)`}><Clock size={compact ? 10 : 12} /><span className="text-[10px]">{late}</span></span>
+      {!compact && <span className="text-[10px] text-[#8A8A9A]">Presença confirmada</span>}
+    </div>
+  )
+}
+
 const TIPO_TO_API: Record<CalendarEvent['type'], string> = { meeting: 'REUNIAO', deadline: 'DEADLINE', task: 'TASK' }
 const TIPO_FROM_API: Record<string, CalendarEvent['type']> = { REUNIAO: 'meeting', DEADLINE: 'deadline', TASK: 'task' }
 const CHANNEL_FROM_API: Record<string, ChannelType> = { INSTAGRAM: 'instagram', LINKEDIN: 'linkedin', SITE: 'site', EMAIL: 'email' }
@@ -80,7 +96,8 @@ function mapEvent(ev: any): CalendarEvent {
     channel: ev.canal ? CHANNEL_FROM_API[ev.canal] : null,
     local: ev.formatoLocal === 'MEET' ? 'meet' : ev.formatoLocal === 'PRESENCIAL' ? 'presencial' : '',
     sala: ev.sala ?? '',
-    attendees: (ev.participantes ?? []).map((p: any) => ({ userId: p.userId, nome: p.nome })),
+    attendanceConfirmed: Boolean(ev.registroPresencaConfirmado),
+    attendees: (ev.participantes ?? []).map((p: any) => ({ userId: p.userId, nome: p.nome, attendanceEligible: Boolean(p.avaliavelPresenca), attendanceStatus: p.statusPresenca ?? null })),
   }
 }
 
@@ -589,7 +606,7 @@ interface EventForm {
 
 interface EventParticipant { id: string; name: string; role: string; initials: string; color: string }
 
-function CalendarView({ currentUserId }: { currentUserId: string }) {
+function CalendarView({ currentUserId, isManager }: { currentUserId: string; isManager: boolean }) {
   const TODAY = dateStr(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [participants, setParticipants] = useState<EventParticipant[]>([])
@@ -599,6 +616,7 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
   const [addModal, setAddModal] = useState<string | null>(null)
   const [form, setForm] = useState<EventForm>({ date: '', title: '', time: '09:00', endTime: '09:30', type: 'meeting', local: '', sala: '', participantIds: [] })
   const [saving, setSaving] = useState(false)
+  const [savingAttendance, setSavingAttendance] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   function loadParticipants() {
@@ -658,6 +676,10 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
     if (!form.title.trim()) return
     setSaving(true); setError('')
     try {
+      const eventBeingEdited = form.id ? events.find((event) => event.id === form.id) : undefined
+      const attendanceToKeep = eventBeingEdited?.attendanceConfirmed && form.type === 'meeting'
+        ? eventBeingEdited.attendees.filter((attendee) => attendee.attendanceEligible && attendee.attendanceStatus && form.participantIds.includes(attendee.userId)).map((attendee) => ({ userId: attendee.userId, status: attendee.attendanceStatus }))
+        : []
       const payload = {
         titulo: form.title, data: form.date, horario: form.time, horarioFim: form.endTime || null,
         tipo: TIPO_TO_API[form.type],
@@ -666,7 +688,9 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
         participantIds: form.participantIds,
       }
       const saved = form.id ? await api.calendar.update(form.id, payload) : await api.calendar.create(payload)
-      setEvents((prev) => form.id ? prev.map((e) => e.id === form.id ? mapEvent(saved) : e) : [...prev, mapEvent(saved)])
+      if (form.id && attendanceToKeep.length > 0) await api.engagement.saveAttendance(form.id, attendanceToKeep)
+      if (form.id) await loadEvents()
+      else setEvents((prev) => [...prev, mapEvent(saved)])
       setAddModal(null)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o evento.')
@@ -678,6 +702,21 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
   async function deleteEvent(id: string) {
     setEvents((prev) => prev.filter((e) => e.id !== id))
     await api.calendar.remove(id).catch(() => setError('Não foi possível apagar o evento.'))
+  }
+
+  function setCalendarAttendance(eventId: string, userId: string, status: AttendanceStatus) {
+    setEvents((current) => current.map((event) => event.id !== eventId ? event : { ...event, attendees: event.attendees.map((attendee) => attendee.userId === userId ? { ...attendee, attendanceStatus: status } : attendee) }))
+  }
+
+  async function saveCalendarAttendance(event: CalendarEvent) {
+    const attendees = event.attendees.filter((attendee) => attendee.attendanceEligible)
+    if (attendees.some((attendee) => !attendee.attendanceStatus)) { setError('Marque todos os membros antes de salvar.'); return }
+    setSavingAttendance(event.id); setError('')
+    try {
+      await api.engagement.saveAttendance(event.id, attendees.map((attendee) => ({ userId: attendee.userId, status: attendee.attendanceStatus })))
+      await loadEvents()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a presença.') }
+    finally { setSavingAttendance(null) }
   }
 
   const eventsOnDate = (d: string) => events.filter((e) => e.date === d)
@@ -728,6 +767,20 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
                           </span>
                         ))}
                         <span className="text-xs text-[#8A8A9A] ml-0.5">{ev.attendees.map((a) => a.nome.split(/\s+/)[0]).join(', ')}</span>
+                      </div>
+                    )}
+                    {isManager && <AttendanceSummary event={ev} />}
+                    {isManager && ev.type === 'meeting' && ev.attendanceConfirmed && (
+                      <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
+                        <div className="flex items-center justify-between mb-2"><p className="text-xs font-semibold text-[#D5D5DE]">Presença e pontualidade</p><span className="text-[10px] text-[#00C853]">Registro confirmado</span></div>
+                        <div className="space-y-2">
+                          {ev.attendees.filter((attendee) => attendee.attendanceEligible).map((attendee) => (
+                            <div key={attendee.userId} className="flex items-center justify-between gap-2"><span className="text-xs text-[#B9B9C5]">{attendee.nome}</span><div className="flex gap-1">
+                              {([{ status: 'PRESENTE', label: 'Presente', icon: <Check size={13} />, color: '#00C853' }, { status: 'AUSENTE', label: 'Ausente', icon: <X size={13} />, color: '#FF5252' }, { status: 'ATRASADO', label: 'Atrasado', icon: <Clock size={13} />, color: '#FFB300' }] as const).map((option) => <button key={option.status} onClick={() => setCalendarAttendance(ev.id, attendee.userId, option.status)} title={option.label} aria-label={`${option.label}: ${attendee.nome}`} className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ color: option.color, background: attendee.attendanceStatus === option.status ? `${option.color}26` : 'rgba(255,255,255,.04)', border: `1px solid ${attendee.attendanceStatus === option.status ? option.color : 'rgba(255,255,255,.08)'}` }}>{option.icon}</button>)}
+                            </div></div>
+                          ))}
+                        </div>
+                        <div className="flex justify-end mt-2"><button onClick={() => saveCalendarAttendance(ev)} disabled={savingAttendance === ev.id} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white bg-[#7D1AD7] disabled:opacity-50">{savingAttendance === ev.id ? 'Salvando…' : 'Salvar edição'}</button></div>
                       </div>
                     )}
                   </div>
@@ -807,6 +860,7 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
                             </button>
                           </div>
                         </div>
+                        {isManager && ev.attendanceConfirmed && <button onClick={() => openDayDetail(ev.date)} className="text-left" title="Abrir registro de presença para edição"><AttendanceSummary event={ev} compact /></button>}
                       </div>
                     )
                   })}
@@ -861,6 +915,7 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
                         <div className="min-w-0 flex-1 flex items-baseline gap-1">
                           <span className="flex-shrink-0" style={{ fontSize: 9, color: s.color, opacity: 0.8 }}>{timeRange(ev)}</span>
                           <p className="text-xs truncate leading-snug" style={{ color: s.color }}>{ev.title}</p>
+                          {isManager && ev.attendanceConfirmed && <span className="ml-auto flex-shrink-0"><AttendanceSummary event={ev} compact /></span>}
                         </div>
                         <button onClick={(e) => { e.stopPropagation(); deleteEvent(ev.id) }} className="flex-shrink-0 opacity-0 group-hover/ev:opacity-100 text-[#FF5252]">
                           <X size={9} />
@@ -1039,6 +1094,30 @@ function CalendarView({ currentUserId }: { currentUserId: string }) {
                 })}
               </div>
             </FormField>
+            {isManager && form.type === 'meeting' && form.id && events.find((event) => event.id === form.id)?.attendanceConfirmed && (() => {
+              const event = events.find((item) => item.id === form.id)!
+              return (
+                <FormField label="Presença e pontualidade confirmadas">
+                  <div className="rounded-xl p-4 space-y-2 bg-[#202024]" style={{ border: '1.5px solid rgba(255,255,255,.1)' }}>
+                    <p className="text-xs text-[#8A8A9A] mb-3">Confira quem esteve presente, faltou ou chegou atrasado. As alterações serão salvas junto com a reunião.</p>
+                    {event.attendees.filter((attendee) => attendee.attendanceEligible).map((attendee) => (
+                      <div key={attendee.userId} className="flex items-center justify-between gap-3 py-1">
+                        <span className="text-sm text-[#D5D5DE]">{attendee.nome}</span>
+                        <div className="flex gap-1.5">
+                          {([{ status: 'PRESENTE', label: 'Presente', icon: <Check size={14} />, color: '#00C853' }, { status: 'AUSENTE', label: 'Ausente', icon: <X size={14} />, color: '#FF5252' }, { status: 'ATRASADO', label: 'Atrasado', icon: <Clock size={14} />, color: '#FFB300' }] as const).map((option) => (
+                            <button key={option.status} type="button" onClick={() => setCalendarAttendance(event.id, attendee.userId, option.status)} aria-label={`${option.label}: ${attendee.nome}`} title={option.label}
+                              className="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-xs font-medium transition-all"
+                              style={{ color: option.color, background: attendee.attendanceStatus === option.status ? `${option.color}26` : 'rgba(255,255,255,.04)', border: `1px solid ${attendee.attendanceStatus === option.status ? option.color : 'rgba(255,255,255,.08)'}` }}>
+                              {option.icon}<span>{option.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </FormField>
+              )
+            })()}
             {error && <p className="text-xs text-[#FF6B6B]" role="alert">{error}</p>}
           </div>
         </Modal>
@@ -1318,8 +1397,22 @@ interface EngagementRow {
   color: string
   scores: Record<string, number>
   quality: number
+  presence: number
+  punctuality: number
+  registeredEvents: number
+  attendances: number
   tasksCompleted: number
   tasksTotal: number
+}
+type AttendanceStatus = 'PRESENTE' | 'AUSENTE' | 'ATRASADO'
+interface AttendanceEvent {
+  id: string
+  titulo: string
+  data: string
+  horario: string
+  horarioFim: string | null
+  pendente: boolean
+  participantes: { userId: string; nome: string; status: AttendanceStatus | null }[]
 }
 const CRITERION_COLORS = ['#7D1AD7', '#FFB300', '#00E5C8', '#E1306C', '#507AE6', '#50E678']
 
@@ -1487,11 +1580,17 @@ function EngagementView({ columns }: { columns: KanbanColumn[] }) {
   const [criteria, setCriteria] = useState<EngagementCriterion[]>([])
   const [editMode, setEditMode] = useState(false)
   const [criteriaModalOpen, setCriteriaModalOpen] = useState(false)
+  const [attendanceEvents, setAttendanceEvents] = useState<AttendanceEvent[]>([])
+  const [attendanceDrafts, setAttendanceDrafts] = useState<Record<string, Record<string, AttendanceStatus | null>>>({})
+  const [savingAttendance, setSavingAttendance] = useState<string | null>(null)
+  const [attendanceError, setAttendanceError] = useState('')
   const [expandedMember, setExpandedMember] = useState<number | string | null>(null)
   const [notes, setNotes] = useState<Record<string, MemberNotes>>({})
   async function loadEngagement() {
-    const result = await api.engagement.get(period)
+    const [result, attendanceResult] = await Promise.all([api.engagement.get(period), api.engagement.attendance(period)])
     setCriteria(result.criterios)
+    setAttendanceEvents(attendanceResult.eventos)
+    setAttendanceDrafts(Object.fromEntries(attendanceResult.eventos.map((event: AttendanceEvent) => [event.id, Object.fromEntries(event.participantes.map((participant) => [participant.userId, participant.status]))])))
     const nextNotes: Record<string, MemberNotes> = {}
     const rows = result.membros.map((member: any, index: number) => {
       let observation: MemberNotes = { feedbacks: '', alertas: '', outros: '' }
@@ -1501,16 +1600,35 @@ function EngagementView({ columns }: { columns: KanbanColumn[] }) {
       nextNotes[member.userId] = observation
       const scores: Record<string, number> = {}
       for (const c of result.criterios) scores[c.id] = member.scores[c.id] ?? 0
-      return { memberId: member.userId, name: member.nome, role: member.cargo ?? 'Analista', initials: member.nome.split(/\s+/).slice(0, 2).map((part: string) => part[0]).join('').toUpperCase(), color: ['#507AE6', '#50E678', '#E1306C', '#FFB300', '#7D1AD7'][index % 5], scores, quality: member.qualidade ?? 0, tasksCompleted: member.tasksConcluidas, tasksTotal: member.tasksTotal }
+      return { memberId: member.userId, name: member.nome, role: member.cargo ?? 'Analista', initials: member.nome.split(/\s+/).slice(0, 2).map((part: string) => part[0]).join('').toUpperCase(), color: ['#507AE6', '#50E678', '#E1306C', '#FFB300', '#7D1AD7'][index % 5], scores, quality: member.qualidade ?? 0, presence: member.presenca ?? 0, punctuality: member.pontualidade ?? 0, registeredEvents: member.eventosRegistrados, attendances: member.comparecimentos, tasksCompleted: member.tasksConcluidas, tasksTotal: member.tasksTotal }
     })
     setData(rows); setNotes(nextNotes)
   }
 
-  useEffect(() => { loadEngagement().catch(console.error) }, [])
+  useEffect(() => {
+    loadEngagement().catch(console.error)
+    const refresh = window.setInterval(() => loadEngagement().catch(console.error), 60_000)
+    return () => window.clearInterval(refresh)
+  }, [])
 
   async function createCriterion(nome: string) { await api.engagement.createCriterion(nome); await loadEngagement() }
   async function renameCriterion(id: string, nome: string) { await api.engagement.updateCriterion(id, nome); await loadEngagement() }
   async function deleteCriterion(id: string) { await api.engagement.removeCriterion(id); await loadEngagement() }
+
+  function setAttendance(eventId: string, userId: string, status: AttendanceStatus) {
+    setAttendanceDrafts((current) => ({ ...current, [eventId]: { ...current[eventId], [userId]: status } }))
+  }
+
+  async function saveEventAttendance(event: AttendanceEvent) {
+    const draft = attendanceDrafts[event.id] ?? {}
+    if (event.participantes.some((participant) => !draft[participant.userId])) { setAttendanceError('Marque todos os membros antes de salvar.'); return }
+    setSavingAttendance(event.id); setAttendanceError('')
+    try {
+      await api.engagement.saveAttendance(event.id, event.participantes.map((participant) => ({ userId: participant.userId, status: draft[participant.userId] })))
+      await loadEngagement()
+    } catch (cause) { setAttendanceError(cause instanceof Error ? cause.message : 'Não foi possível salvar a presença.') }
+    finally { setSavingAttendance(null) }
+  }
 
   async function toggleEditMode() {
     if (editMode) {
@@ -1586,6 +1704,8 @@ function EngagementView({ columns }: { columns: KanbanColumn[] }) {
   }
 
   const avgQuality = (data.length ? data.reduce((a, r) => a + effectiveQuality(r.memberId), 0) / data.length : 0).toFixed(1)
+  const avgPresence = (data.length ? data.reduce((a, r) => a + r.presence, 0) / data.length : 0).toFixed(1)
+  const avgPunctuality = (data.length ? data.reduce((a, r) => a + r.punctuality, 0) / data.length : 0).toFixed(1)
   const avgFor = (criterionId: string) => (data.length ? data.reduce((a, r) => a + (r.scores[criterionId] ?? 0), 0) / data.length : 0).toFixed(1)
 
   const NOTE_CATS: { key: NoteCategory; label: string; color: string; bg: string }[] = [
@@ -1616,7 +1736,38 @@ function EngagementView({ columns }: { columns: KanbanColumn[] }) {
           </div>
         </div>
 
-        <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: `repeat(${criteria.length + 1}, minmax(0, 1fr))` }}>
+        {attendanceEvents.some((event) => event.pendente) && (
+          <div className="mb-5 rounded-2xl px-5 py-4 flex items-center gap-3" style={{ background: 'rgba(255,179,0,0.12)', border: '1px solid rgba(255,179,0,0.35)' }}>
+            <Clock size={20} className="text-[#FFB300]" />
+            <div><p className="text-sm font-semibold text-[#F0F0F5]">Registro de presença pendente</p><p className="text-xs text-[#B9B9C5]">{attendanceEvents.filter((event) => event.pendente).length} evento(s) encerrado(s) aguardando confirmação.</p></div>
+          </div>
+        )}
+
+        {attendanceEvents.length > 0 && (
+          <section className="mb-6 rounded-2xl p-5 bg-[#17171A]" style={{ border: '1.5px solid rgba(255,255,255,0.1)' }}>
+            <div className="mb-4"><h3 className="text-sm font-semibold text-[#F0F0F5]">Presença após eventos</h3><p className="text-xs text-[#8A8A9A] mt-1">Disponível somente para a gerente. Os registros continuam editáveis após salvar.</p></div>
+            <div className="space-y-3">
+              {attendanceEvents.map((event) => (
+                <div key={event.id} className="rounded-xl p-4 bg-[#202024]" style={{ border: event.pendente ? '1px solid rgba(255,179,0,.35)' : '1px solid rgba(255,255,255,.08)' }}>
+                  <div className="flex items-center justify-between gap-3 mb-3"><div><p className="text-sm font-medium text-[#F0F0F5]">{event.titulo}</p><p className="text-xs text-[#8A8A9A]">{new Date(event.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} · {event.horario}{event.horarioFim ? `–${event.horarioFim}` : ''}</p></div>{event.pendente && <span className="text-[10px] font-semibold px-2 py-1 rounded-full text-[#FFB300] bg-[rgba(255,179,0,.12)]">Pendente</span>}</div>
+                  <div className="space-y-2">
+                    {event.participantes.map((participant) => { const selected = attendanceDrafts[event.id]?.[participant.userId]; return (
+                      <div key={participant.userId} className="flex items-center justify-between gap-3"><span className="text-xs text-[#D5D5DE]">{participant.nome}</span><div className="flex gap-1.5">
+                        {([{ status: 'PRESENTE', label: 'Presente', icon: <Check size={14} />, color: '#00C853' }, { status: 'AUSENTE', label: 'Ausente', icon: <X size={14} />, color: '#FF5252' }, { status: 'ATRASADO', label: 'Atrasado', icon: <Clock size={14} />, color: '#FFB300' }] as const).map((option) => <button key={option.status} onClick={() => setAttendance(event.id, participant.userId, option.status)} aria-label={`${option.label}: ${participant.nome}`} title={option.label} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all" style={{ color: option.color, background: selected === option.status ? `${option.color}26` : 'rgba(255,255,255,.04)', border: `1px solid ${selected === option.status ? option.color : 'rgba(255,255,255,.08)'}` }}>{option.icon}</button>)}
+                      </div></div>
+                    )})}
+                  </div>
+                  <div className="flex justify-end mt-3"><button onClick={() => saveEventAttendance(event)} disabled={savingAttendance === event.id || event.participantes.length === 0} className="text-xs font-semibold px-3 py-2 rounded-lg text-white bg-[#7D1AD7] disabled:opacity-50">{savingAttendance === event.id ? 'Salvando…' : event.pendente ? 'Confirmar registro' : 'Salvar edição'}</button></div>
+                </div>
+              ))}
+            </div>
+            {attendanceError && <p className="text-xs text-[#FF5252] mt-3" role="alert">{attendanceError}</p>}
+          </section>
+        )}
+
+        <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: `repeat(${criteria.length + 3}, minmax(0, 1fr))` }}>
+          <div className="kpi-card bg-[#17171A] rounded-xl p-4" style={{ border: '1.5px solid rgba(255,255,255,0.1)' }}><div className="text-2xl font-bold mb-1 text-[#00C853]">{avgPresence}<span className="text-sm font-normal text-[#555566]">/5</span></div><div className="text-xs text-[#8A8A9A]">Média Presença</div></div>
+          <div className="kpi-card bg-[#17171A] rounded-xl p-4" style={{ border: '1.5px solid rgba(255,255,255,0.1)' }}><div className="text-2xl font-bold mb-1 text-[#FFB300]">{avgPunctuality}<span className="text-sm font-normal text-[#555566]">/5</span></div><div className="text-xs text-[#8A8A9A]">Média Pontualidade</div></div>
           {criteria.map((c, i) => (
             <div key={c.id} className="kpi-card bg-[#17171A] rounded-xl p-4" style={{ border: '1.5px solid rgba(255,255,255,0.1)' }}>
               <div className="text-2xl font-bold mb-1" style={{ color: CRITERION_COLORS[i % CRITERION_COLORS.length] }}>{avgFor(c.id)}<span className="text-sm font-normal text-[#555566]">/5</span></div>
@@ -1655,6 +1806,8 @@ function EngagementView({ columns }: { columns: KanbanColumn[] }) {
 
                     {/* Scores */}
                     <div className="flex items-center gap-6 flex-1 flex-wrap">
+                      <div className="min-w-0"><div className="text-xs text-[#555566] mb-1">Presença</div><StarScore editMode={false} isQuality={false} val={row.presence} autoVal={null} color="#00C853" draftValue="" onChange={() => undefined} onBlur={() => undefined} /><div className="text-[10px] text-[#555566]">{row.attendances}/{row.registeredEvents} eventos</div></div>
+                      <div className="min-w-0"><div className="text-xs text-[#555566] mb-1">Pontualidade</div><StarScore editMode={false} isQuality={false} val={row.punctuality} autoVal={null} color="#FFB300" draftValue="" onChange={() => undefined} onBlur={() => undefined} /></div>
                       {criteria.map((c, i) => (
                         <div key={c.id} className="min-w-0">
                           <div className="text-xs text-[#555566] mb-1">{c.nome}</div>
@@ -1792,7 +1945,7 @@ export default function Monitoramento({ profile, isManager, channel, setChannel,
       </header>
       <div className="module-stage flex-1 overflow-hidden">
         {tab === 'kanban' && <KanbanBoard channel={channel} setChannel={setChannel} isManager={isManager} members={members} setMembers={setMembers} columns={columns} setColumns={setColumns} />}
-        {tab === 'calendario' && <CalendarView currentUserId={String(currentUserId)} />}
+        {tab === 'calendario' && <CalendarView currentUserId={String(currentUserId)} isManager={isManager} />}
         {tab === 'campanhas' && <CampaignsView channel={channel} setChannel={setChannel} />}
         {tab === 'engajamento' && isManager && <EngagementView columns={columns} />}
       </div>

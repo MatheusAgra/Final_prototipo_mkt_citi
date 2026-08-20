@@ -31,23 +31,63 @@ campaignsRouter.delete('/:id/metrics/:metricId',asyncRoute(async(req,res)=>{awai
 
 export const engagementRouter = Router(); engagementRouter.use(authenticate,managerOnly)
 const monthBounds=(period:string)=>{if(!/^\d{4}-\d{2}$/.test(period))throw new ApiError(422,'INVALID_PERIOD');const start=new Date(`${period}-01T00:00:00.000Z`);const end=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,1));return{start,end}}
+const manualCriterionWhere={nome:{notIn:['Pontualidade','Presença']}}
+const eventEnd=(event:{data:Date;horario:string;horarioFim:string|null})=>{
+  const date=event.data.toISOString().slice(0,10)
+  const endTime=event.horarioFim??`${String((Number(event.horario.slice(0,2))+1)%24).padStart(2,'0')}:${event.horario.slice(3)}`
+  const endDate=endTime<event.horario?new Date(new Date(`${date}T12:00:00.000Z`).getTime()+86400000).toISOString().slice(0,10):date
+  return new Date(`${endDate}T${endTime}:00-03:00`)
+}
 
 // Critérios de avaliação configuráveis pela Gerente (ex.: Pontualidade, Presença, Autonomia).
 // "Qualidade" não é um critério aqui — continua calculada automaticamente a partir das notas das tasks.
-engagementRouter.get('/criteria',asyncRoute(async(_req,res)=>res.json(await prisma.engagementCriterion.findMany({orderBy:{ordem:'asc'}}))))
-engagementRouter.post('/criteria',asyncRoute(async(req,res)=>{const body=z.object({nome:z.string().trim().min(1)}).parse(req.body);const max=await prisma.engagementCriterion.aggregate({_max:{ordem:true}});res.status(201).json(await prisma.engagementCriterion.create({data:{nome:body.nome,ordem:(max._max.ordem??-1)+1}}))}))
+engagementRouter.get('/criteria',asyncRoute(async(_req,res)=>res.json(await prisma.engagementCriterion.findMany({where:manualCriterionWhere,orderBy:{ordem:'asc'}}))))
+engagementRouter.post('/criteria',asyncRoute(async(req,res)=>{const body=z.object({nome:z.string().trim().min(1).refine((nome)=>!['pontualidade','presença','presenca'].includes(nome.toLocaleLowerCase('pt-BR')),{message:'Pontualidade e Presença são calculadas automaticamente'})}).parse(req.body);const max=await prisma.engagementCriterion.aggregate({_max:{ordem:true}});res.status(201).json(await prisma.engagementCriterion.create({data:{nome:body.nome,ordem:(max._max.ordem??-1)+1}}))}))
 engagementRouter.patch('/criteria/:id',asyncRoute(async(req,res)=>{const body=z.object({nome:z.string().trim().min(1).optional(),ordem:z.number().int().optional()}).parse(req.body);res.json(await prisma.engagementCriterion.update({where:{id:String(req.params.id)},data:body}))}))
 engagementRouter.delete('/criteria/:id',asyncRoute(async(req,res)=>{await prisma.engagementCriterion.delete({where:{id:String(req.params.id)}});res.status(204).send()}))
+
+engagementRouter.get('/attendance/events',asyncRoute(async(req,res)=>{
+  const period=z.string().default(new Date().toISOString().slice(0,7)).parse(req.query.periodo)
+  const {start,end}=monthBounds(period)
+  const events=await prisma.calendarEvent.findMany({
+    where:{data:{gte:start,lt:end},tipo:'REUNIAO'},orderBy:[{data:'desc'},{horario:'desc'}],
+    include:{participantes:{where:{user:{ativo:true,perfil:'ANALISTA'}},include:{user:true}}},
+  })
+  const finalized=events.filter((event)=>eventEnd(event)<=new Date()).map((event)=>({
+    id:event.id,titulo:event.titulo,data:event.data,horario:event.horario,horarioFim:event.horarioFim,
+    encerradoEm:eventEnd(event),
+    pendente:event.participantes.some((participant)=>participant.statusPresenca===null),
+    participantes:event.participantes.map((participant)=>({userId:participant.userId,nome:participant.user.nomeCompleto,status:participant.statusPresenca})),
+  }))
+  const pending=finalized.filter((event)=>event.pendente)
+  res.json({pendentes:pending.length,eventos:pending})
+}))
+
+engagementRouter.put('/attendance/events/:eventId',asyncRoute(async(req,res)=>{
+  const eventId=String(req.params.eventId)
+  const event=await prisma.calendarEvent.findUnique({where:{id:eventId},include:{participantes:{include:{user:true}}}})
+  if(!event)throw new ApiError(404,'NOT_FOUND','Evento não encontrado')
+  if(event.tipo!=='REUNIAO')throw new ApiError(422,'NOT_A_MEETING','Presença e pontualidade só podem ser registradas em reuniões')
+  if(eventEnd(event)>new Date())throw new ApiError(422,'EVENT_NOT_FINISHED','A presença só pode ser registrada após o encerramento do evento')
+  const body=z.object({participantes:z.array(z.object({userId:z.string().uuid(),status:z.enum(['PRESENTE','AUSENTE','ATRASADO'])})).min(1)}).parse(req.body)
+  const analystIds=new Set(event.participantes.filter((participant)=>participant.user.ativo&&participant.user.perfil==='ANALISTA').map((participant)=>participant.userId))
+  if(body.participantes.some((participant)=>!analystIds.has(participant.userId)))throw new ApiError(422,'INVALID_PARTICIPANT','Somente analistas participantes do evento podem ser avaliados')
+  await prisma.$transaction(body.participantes.map((participant)=>prisma.calendarEventAttendee.update({
+    where:{eventId_userId:{eventId,userId:participant.userId}},data:{statusPresenca:participant.status,presencaRegistradaEm:new Date()},
+  })))
+  res.json({ok:true})
+}))
 
 engagementRouter.get('/',asyncRoute(async(req,res)=>{
   const period=z.string().default(new Date().toISOString().slice(0,7)).parse(req.query.periodo)
   const {start,end}=monthBounds(period)
   const [criterios,users]=await Promise.all([
-    prisma.engagementCriterion.findMany({orderBy:{ordem:'asc'}}),
+    prisma.engagementCriterion.findMany({where:manualCriterionWhere,orderBy:{ordem:'asc'}}),
     prisma.user.findMany({where:{ativo:true,perfil:'ANALISTA'},include:{
       engajamentos:{where:{periodo:period}},
       pontuacoesEngajamento:{where:{periodo:period}},
       atribuicoes:{where:{task:{OR:[{dataEntrega:{gte:start,lt:end}},{dataEntrega:null,createdAt:{gte:start,lt:end}}]}},include:{task:{include:{coluna:true}}}},
+      participacoes:{where:{event:{data:{gte:start,lt:end},tipo:'REUNIAO'}},include:{event:true}},
     }}),
   ])
   const membros=users.map((user)=>{
@@ -55,12 +95,17 @@ engagementRouter.get('/',asyncRoute(async(req,res)=>{
     const graded=user.atribuicoes.map((a)=>a.nota).filter((n):n is number=>n!==null)
     const scores:Record<string,number|null>={}
     for(const c of criterios){const s=user.pontuacoesEngajamento.find((p)=>p.criterionId===c.id);scores[c.id]=s?.valor??null}
-    return{userId:user.id,nome:user.nomeCompleto,cargo:user.cargo,observacoes:manual?.observacoes??null,qualidade:graded.length?Math.round(graded.reduce((a,b)=>a+b,0)/graded.length*10)/10:null,scores,tasksTotal:user.atribuicoes.length,tasksConcluidas:user.atribuicoes.filter((a)=>a.task.coluna.isDone).length}
+    const attendance=user.participacoes.filter((participation)=>eventEnd(participation.event)<=new Date()&&participation.statusPresenca!==null)
+    const attended=attendance.filter((participation)=>participation.statusPresenca!=='AUSENTE')
+    const onTime=attendance.filter((participation)=>participation.statusPresenca==='PRESENTE')
+    const presenca=attendance.length?Math.round(attended.length/attendance.length*50)/10:null
+    const pontualidade=attended.length?Math.round(onTime.length/attended.length*50)/10:null
+    return{userId:user.id,nome:user.nomeCompleto,cargo:user.cargo,observacoes:manual?.observacoes??null,qualidade:graded.length?Math.round(graded.reduce((a,b)=>a+b,0)/graded.length*10)/10:null,presenca,pontualidade,eventosRegistrados:attendance.length,comparecimentos:attended.length,scores,tasksTotal:user.atribuicoes.length,tasksConcluidas:user.atribuicoes.filter((a)=>a.task.coluna.isDone).length}
   })
   const avg=(values:(number|null)[])=>{const nums=values.filter((v):v is number=>v!==null);return nums.length?Math.round(nums.reduce((a,b)=>a+b,0)/nums.length*10)/10:null}
   const porCriterio:Record<string,number|null>={}
   for(const c of criterios)porCriterio[c.id]=avg(membros.map((m)=>m.scores[c.id]))
-  res.json({periodo:period,criterios,medias:{qualidade:avg(membros.map((m)=>m.qualidade)),porCriterio},membros})
+  res.json({periodo:period,criterios,medias:{qualidade:avg(membros.map((m)=>m.qualidade)),presenca:avg(membros.map((m)=>m.presenca)),pontualidade:avg(membros.map((m)=>m.pontualidade)),porCriterio},membros})
 }))
 engagementRouter.put('/:userId',asyncRoute(async(req,res)=>{
   const periodo=z.string().parse(req.query.periodo);monthBounds(periodo)

@@ -63,7 +63,10 @@ export const calendarRouter = Router(); calendarRouter.use(authenticate)
 const eventBody = z.object({ titulo: z.string().trim().min(1), data: z.coerce.date(), horario: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), horarioFim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(), tipo: z.enum(['REUNIAO','DEADLINE','TASK']), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).nullable().optional(), formatoLocal: z.enum(['MEET','PRESENCIAL']).nullable().optional(), sala: z.string().trim().min(1).nullable().optional(), participantIds: z.array(z.string().uuid()).default([]) })
 const normalizeSala = <T extends { formatoLocal?: 'MEET' | 'PRESENCIAL' | null; sala?: string | null }>(body: T): T => ({ ...body, sala: body.formatoLocal === 'PRESENCIAL' ? (body.sala ?? null) : null })
 const eventInclude = { participantes: { where: { user: { ativo: true } }, include: { user: true } } } as const
-const serializeEvent = (event: any) => ({ ...event, participantes: event.participantes.map((p: any) => ({ userId: p.userId, nome: p.user.nomeCompleto, email: p.user.email })) })
+const serializeEvent = (event: any, manager=false) => ({ ...event,
+  registroPresencaConfirmado:event.tipo==='REUNIAO'&&event.participantes.some((p:any)=>p.user.perfil==='ANALISTA'&&p.statusPresenca!==null),
+  participantes:event.participantes.map((p:any)=>({userId:p.userId,nome:p.user.nomeCompleto,email:p.user.email,avaliavelPresenca:p.user.perfil==='ANALISTA',...(manager&&p.user.perfil==='ANALISTA'?{statusPresenca:p.statusPresenca}:{})})),
+})
 async function assertParticipantsValid(participantIds: string[]) {
   const count = await prisma.user.count({ where: { id: { in: participantIds }, ativo: true } })
   if (count !== new Set(participantIds).size) throw new ApiError(422, 'INVALID_PARTICIPANT', 'Somente usuários ativos podem participar do evento')
@@ -72,7 +75,7 @@ calendarRouter.get('/participants', asyncRoute(async (_req, res) => {
   const users = await prisma.user.findMany({ where: { ativo: true }, select: { id: true, nomeCompleto: true, cargo: true, perfil: true }, orderBy: { nomeCompleto: 'asc' } })
   res.json(users)
 }))
-calendarRouter.get('/events', asyncRoute(async (req, res) => { const q = z.object({ inicio: z.coerce.date().optional(), fim: z.coerce.date().optional(), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).optional() }).parse(req.query); const events = await prisma.calendarEvent.findMany({ where: { ...(q.canal?{canal:q.canal}:{}), ...(q.inicio||q.fim?{data:{gte:q.inicio,lte:q.fim}}:{}) }, orderBy: [{data:'asc'},{horario:'asc'}], include: eventInclude }); res.json(events.map(serializeEvent)) }))
+calendarRouter.get('/events', asyncRoute(async (req, res) => { const q = z.object({ inicio: z.coerce.date().optional(), fim: z.coerce.date().optional(), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).optional() }).parse(req.query); const events = await prisma.calendarEvent.findMany({ where: { ...(q.canal?{canal:q.canal}:{}), ...(q.inicio||q.fim?{data:{gte:q.inicio,lte:q.fim}}:{}) }, orderBy: [{data:'asc'},{horario:'asc'}], include: eventInclude }); res.json(events.map((event)=>serializeEvent(event,req.user!.perfil==='GERENTE'))) }))
 const googleInput = (event: any) => ({
   titulo: event.titulo,
   dataISO: event.data.toISOString().slice(0, 10),
@@ -97,7 +100,7 @@ calendarRouter.post('/events', asyncRoute(async (req, res) => {
     const googleEventId = await createGoogleEvent(refreshToken, googleInput(event))
     if (googleEventId) event = await prisma.calendarEvent.update({ where: { id: event.id }, data: { googleEventId }, include: eventInclude })
   }
-  res.status(201).json(serializeEvent(event))
+  res.status(201).json(serializeEvent(event,req.user!.perfil==='GERENTE'))
 }))
 calendarRouter.patch('/events/:id', asyncRoute(async (req, res) => {
   const body = req.body.formatoLocal !== undefined ? normalizeSala(eventBody.partial().parse(req.body)) : eventBody.partial().parse(req.body)
@@ -125,7 +128,7 @@ calendarRouter.patch('/events/:id', asyncRoute(async (req, res) => {
       if (googleEventId) event = await prisma.calendarEvent.update({ where: { id: event.id }, data: { googleEventId }, include: eventInclude })
     }
   }
-  res.json(serializeEvent(event))
+  res.json(serializeEvent(event,req.user!.perfil==='GERENTE'))
 }))
 calendarRouter.delete('/events/:id', asyncRoute(async (req, res) => {
   const existing = await prisma.calendarEvent.findUniqueOrThrow({ where: { id: String(req.params.id) } })

@@ -1398,15 +1398,17 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                               <span style={{ color: '#8A8A9A' }}>{entry.date}</span>
                               <span style={{ color: '#7D1AD7' }}>Alcance: {entry.reach.toLocaleString('pt-BR')}</span>
                               <span style={{ color: '#00C853' }}>Interações: {entry.interactions.toLocaleString('pt-BR')}</span>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
                                 <button onClick={() => toggleEntryInChart(camp.id, entry)}
-                                  className="opacity-0 group-hover:opacity-100 transition-all"
-                                  style={{ color: entry.showInChart ? '#7D1AD7' : '#555566' }}
+                                  className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
+                                  style={{ color: entry.showInChart ? '#7D1AD7' : '#8A8A9A', background: entry.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
                                   title={entry.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
-                                  {entry.showInChart ? <Eye size={12} /> : <EyeOff size={12} />}
+                                  {entry.showInChart ? <Eye size={15} /> : <EyeOff size={15} />}
                                 </button>
-                                <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)} className="opacity-0 group-hover:opacity-100 text-[#FF5252] hover:text-[#FF5252]">
-                                  <Trash2 size={12} />
+                                <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)}
+                                  className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]"
+                                  title="Apagar registro">
+                                  <Trash2 size={15} />
                                 </button>
                               </div>
                             </div>

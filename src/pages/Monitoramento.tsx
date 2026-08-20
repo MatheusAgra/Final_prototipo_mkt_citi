@@ -96,6 +96,7 @@ function mapEvent(ev: any): CalendarEvent {
     channel: ev.canal ? CHANNEL_FROM_API[ev.canal] : null,
     local: ev.formatoLocal === 'MEET' ? 'meet' : ev.formatoLocal === 'PRESENCIAL' ? 'presencial' : '',
     sala: ev.sala ?? '',
+    linkMeet: ev.linkMeet ?? '',
     attendanceConfirmed: Boolean(ev.registroPresencaConfirmado),
     attendees: (ev.participantes ?? []).map((p: any) => ({ userId: p.userId, nome: p.nome, attendanceEligible: Boolean(p.avaliavelPresenca), attendanceStatus: p.statusPresenca ?? null })),
   }
@@ -601,7 +602,7 @@ const typeStyle = {
 
 interface EventForm {
   id?: string; date: string; title: string; time: string; endTime: string
-  type: 'meeting' | 'deadline' | 'task'; local: 'meet' | 'presencial' | ''; sala: string; participantIds: string[]
+  type: 'meeting' | 'deadline' | 'task'; local: 'meet' | 'presencial' | ''; sala: string; linkMeet: string; participantIds: string[]
 }
 
 interface EventParticipant { id: string; name: string; role: string; initials: string; color: string }
@@ -614,7 +615,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
   const [navDate, setNavDate] = useState(new Date())
   const [dayDetail, setDayDetail] = useState<string | null>(null)
   const [addModal, setAddModal] = useState<string | null>(null)
-  const [form, setForm] = useState<EventForm>({ date: '', title: '', time: '09:00', endTime: '09:30', type: 'meeting', local: '', sala: '', participantIds: [] })
+  const [form, setForm] = useState<EventForm>({ date: '', title: '', time: '09:00', endTime: '09:30', type: 'meeting', local: '', sala: '', linkMeet: '', participantIds: [] })
   const [saving, setSaving] = useState(false)
   const [savingAttendance, setSavingAttendance] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -655,14 +656,14 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
   }
 
   function openAdd(date: string) {
-    setForm({ date, title: '', time: '09:00', endTime: '09:30', type: 'meeting', local: '', sala: '', participantIds: [currentUserId] })
+    setForm({ date, title: '', time: '09:00', endTime: '09:30', type: 'meeting', local: '', sala: '', linkMeet: '', participantIds: [currentUserId] })
     setError('')
     setAddModal(date)
     loadParticipants().catch(() => setError('Não foi possível carregar a lista de participantes.'))
   }
 
   function openEdit(ev: CalendarEvent) {
-    setForm({ id: ev.id, date: ev.date, title: ev.title, time: ev.time, endTime: ev.endTime, type: ev.type, local: ev.local, sala: ev.sala, participantIds: ev.attendees.map((a) => a.userId) })
+    setForm({ id: ev.id, date: ev.date, title: ev.title, time: ev.time, endTime: ev.endTime, type: ev.type, local: ev.local, sala: ev.sala, linkMeet: ev.linkMeet, participantIds: ev.attendees.map((a) => a.userId) })
     setError('')
     setAddModal(ev.date)
     loadParticipants().catch(() => setError('Não foi possível carregar a lista de participantes.'))
@@ -685,6 +686,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
         tipo: TIPO_TO_API[form.type],
         formatoLocal: form.local ? (form.local === 'meet' ? 'MEET' : 'PRESENCIAL') : null,
         sala: form.local === 'presencial' ? (form.sala || null) : null,
+        linkMeet: form.local === 'meet' ? (form.linkMeet.trim() || null) : null,
         participantIds: form.participantIds,
       }
       const saved = form.id ? await api.calendar.update(form.id, payload) : await api.calendar.create(payload)
@@ -755,7 +757,14 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
                     <p className="text-sm font-medium text-[#F0F0F5] leading-snug">{ev.title}</p>
                     {ev.local && (
                       <p className="text-xs mt-0.5" style={{ color: '#8A8A9A' }}>
-                        {ev.local === 'meet' ? 'Google Meet' : `Presencial${ev.sala ? ` — ${ev.sala}` : ''}`}
+                        {ev.local === 'meet' ? (
+                          ev.linkMeet ? (
+                            <a href={ev.linkMeet} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                              className="underline hover:text-[#7D1AD7]" style={{ color: '#7D1AD7' }}>
+                              Entrar no Google Meet
+                            </a>
+                          ) : 'Google Meet'
+                        ) : `Presencial${ev.sala ? ` — ${ev.sala}` : ''}`}
                       </p>
                     )}
                     {ev.attendees.length > 0 && (
@@ -1058,7 +1067,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
             <FormField label="Local">
               <div className="flex gap-2 flex-wrap">
                 {([['', 'Nenhum'], ['meet', 'Meet'], ['presencial', 'Presencial']] as const).map(([value, label]) => (
-                  <button key={value || 'nenhum'} onClick={() => setForm((f) => ({ ...f, local: value, sala: value === 'presencial' ? f.sala : '' }))}
+                  <button key={value || 'nenhum'} onClick={() => setForm((f) => ({ ...f, local: value, sala: value === 'presencial' ? f.sala : '', linkMeet: value === 'meet' ? f.linkMeet : '' }))}
                     className="text-xs px-3 py-1 rounded-full font-medium transition-all"
                     style={form.local === value ? { background: '#7D1AD7', color: '#fff' } : { background: 'rgba(255,255,255,0.06)', color: '#8A8A9A' }}>
                     {label}
@@ -1068,6 +1077,11 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
               {form.local === 'presencial' && (
                 <div className="mt-2">
                   <Inp value={form.sala} onChange={(v) => setForm((f) => ({ ...f, sala: v }))} placeholder="Ex: Sala de reunião 3" />
+                </div>
+              )}
+              {form.local === 'meet' && (
+                <div className="mt-2">
+                  <Inp value={form.linkMeet} onChange={(v) => setForm((f) => ({ ...f, linkMeet: v }))} placeholder="Ex: https://meet.google.com/abc-defg-hij" />
                 </div>
               )}
             </FormField>

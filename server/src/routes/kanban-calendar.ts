@@ -60,8 +60,8 @@ kanbanRouter.patch('/tasks/:id/move', asyncRoute(async (req, res) => { const bod
 kanbanRouter.delete('/tasks/:id', asyncRoute(async (req, res) => { await prisma.task.delete({ where: { id: String(req.params.id) } }); res.status(204).send() }))
 
 export const calendarRouter = Router(); calendarRouter.use(authenticate)
-const eventBody = z.object({ titulo: z.string().trim().min(1), data: z.coerce.date(), horario: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), horarioFim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(), tipo: z.enum(['REUNIAO','DEADLINE','TASK']), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).nullable().optional(), formatoLocal: z.enum(['MEET','PRESENCIAL']).nullable().optional(), sala: z.string().trim().min(1).nullable().optional(), participantIds: z.array(z.string().uuid()).default([]) })
-const normalizeSala = <T extends { formatoLocal?: 'MEET' | 'PRESENCIAL' | null; sala?: string | null }>(body: T): T => ({ ...body, sala: body.formatoLocal === 'PRESENCIAL' ? (body.sala ?? null) : null })
+const eventBody = z.object({ titulo: z.string().trim().min(1), data: z.coerce.date(), horario: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), horarioFim: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(), tipo: z.enum(['REUNIAO','DEADLINE','TASK']), canal: z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL']).nullable().optional(), formatoLocal: z.enum(['MEET','PRESENCIAL']).nullable().optional(), sala: z.string().trim().min(1).nullable().optional(), linkMeet: z.string().trim().url().nullable().optional(), participantIds: z.array(z.string().uuid()).default([]) })
+const normalizeSala = <T extends { formatoLocal?: 'MEET' | 'PRESENCIAL' | null; sala?: string | null; linkMeet?: string | null }>(body: T): T => ({ ...body, sala: body.formatoLocal === 'PRESENCIAL' ? (body.sala ?? null) : null, linkMeet: body.formatoLocal === 'MEET' ? (body.linkMeet ?? null) : null })
 const eventInclude = { participantes: { where: { user: { ativo: true } }, include: { user: true } } } as const
 const serializeEvent = (event: any, manager=false) => ({ ...event,
   registroPresencaConfirmado:event.tipo==='REUNIAO'&&event.participantes.some((p:any)=>p.user.perfil==='ANALISTA'&&p.statusPresenca!==null),
@@ -82,7 +82,7 @@ const googleInput = (event: any) => ({
   horario: event.horario,
   horarioFim: event.horarioFim,
   attendeeEmails: event.participantes.map((p: any) => p.user.email),
-  location: event.formatoLocal === 'PRESENCIAL' ? event.sala ?? undefined : event.formatoLocal === 'MEET' ? 'Google Meet' : undefined,
+  location: event.formatoLocal === 'PRESENCIAL' ? event.sala ?? undefined : event.formatoLocal === 'MEET' ? (event.linkMeet ?? 'Google Meet') : undefined,
 })
 async function refreshTokenFor(userId: string | null): Promise<string | null> {
   if (!userId) return null

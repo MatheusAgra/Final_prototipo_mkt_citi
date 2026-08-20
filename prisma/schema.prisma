@@ -193,6 +193,7 @@ model CalendarEvent {
   canal       CanalSocial?
   formatoLocal FormatoLocalEvento?
   sala        String?
+  linkMeet    String?
   googleEventId String?
   criadorId   String?
   criador     User?                   @relation(fields: [criadorId], references: [id])

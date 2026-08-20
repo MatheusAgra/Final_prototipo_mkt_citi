@@ -86,6 +86,7 @@ export interface CalendarEvent {
   channel: ChannelType | null
   local: 'meet' | 'presencial' | ''
   sala: string
+  linkMeet: string
   attendanceConfirmed: boolean
   attendees: { userId: string; nome: string; attendanceEligible: boolean; attendanceStatus: 'PRESENTE' | 'AUSENTE' | 'ATRASADO' | null }[]
 }

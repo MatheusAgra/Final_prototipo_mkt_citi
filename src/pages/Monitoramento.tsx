@@ -1507,7 +1507,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {camp.daysRunning > 0 && (
                       <span className="text-xs" style={{ color: '#555566' }}>
-                        <span style={{ color: '#7D1AD7', fontWeight: 600 }}>{camp.daysRunning}</span> d no ar
+                        <span style={{ color: '#7D1AD7', fontWeight: 600 }}>{camp.daysRunning}</span> dias no ar
                       </span>
                     )}
                     <button onClick={() => openEdit(camp)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)] transition-all" title="Editar campanha">

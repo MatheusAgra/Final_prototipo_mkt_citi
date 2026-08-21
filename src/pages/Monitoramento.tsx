@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings,
+  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings, Eye, EyeOff,
   Clock, Flame, Trash2, BarChart2, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import {
@@ -1317,6 +1317,12 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     setExpandedMetrics((p) => ({ ...p, [campId]: true }))
   }
 
+  async function toggleEntryInChart(campId: string, entry: CampaignMetricEntry) {
+    const valores = entry.values.map((v) => ({ nome: v.name, valor: v.value }))
+    await api.campaigns.addMetric(campId, { data: entry.date, alcance: entry.reach, interacoes: entry.interactions, mostrarGrafico: !entry.showInChart, valores }).catch(console.error)
+    reload()
+  }
+
   async function deleteMetricEntry(campId: string, metricId: string) {
     await api.campaigns.removeMetric(campId, metricId).catch(console.error)
     reload()
@@ -1464,7 +1470,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const colorFor = (key: string) => GOAL_COLORS[Math.max(0, chartSeries.indexOf(key)) % GOAL_COLORS.length]
             const goalKey = (g: CampaignGoal) => (g === alcanceGoal ? 'reach' : g === interacoesGoal ? 'interactions' : g.name)
             // 0 significa "não preenchido" nesse registro — não plotamos o ponto para não sugerir que o valor real foi zero
-            const chartData = camp.dailyEntries.map((e) => {
+            const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => {
               const row: Record<string, string | number> = { date: e.date.slice(5) }
               if (e.reach !== 0) row.reach = e.reach
               if (e.interactions !== 0) row.interactions = e.interactions
@@ -1612,6 +1618,12 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                                   className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]"
                                   title="Editar registro">
                                   <Edit2 size={15} />
+                                </button>
+                                <button onClick={() => toggleEntryInChart(camp.id, entry)}
+                                  className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
+                                  style={{ color: entry.showInChart ? '#7D1AD7' : '#8A8A9A', background: entry.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
+                                  title={entry.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
+                                  {entry.showInChart ? <Eye size={15} /> : <EyeOff size={15} />}
                                 </button>
                                 <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)}
                                   className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]"

@@ -1523,25 +1523,23 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
                 </div>
 
-                {camp.status !== 'planejada' && (alcanceGoal || interacoesGoal) && (
-                  <div className="grid grid-cols-2 gap-6 mb-3">
+                {camp.status !== 'planejada' && camp.goals.length > 0 && (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
                     {alcanceGoal && (
                       <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> Alcance</div>
-                        <ProgressBar value={camp.reach} target={alcanceGoal.value} color="#7D1AD7" /></div>
+                        <ProgressBar value={camp.reach} target={alcanceGoal.value} color={colorFor('reach')} /></div>
                     )}
                     {interacoesGoal && (
                       <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><BarChart2 size={11} /> Interações</div>
-                        <ProgressBar value={camp.interactions} target={interacoesGoal.value} color="#00C853" /></div>
+                        <ProgressBar value={camp.interactions} target={interacoesGoal.value} color={colorFor('interactions')} /></div>
                     )}
-                  </div>
-                )}
-                {otherGoals.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {otherGoals.map((g) => (
-                      <span key={g.id} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium" style={{ background: 'rgba(125,26,215,0.08)', color: '#507AE6' }}>
-                        <Target size={10} /> Meta {g.name}: {g.value.toLocaleString('pt-BR')}
-                      </span>
-                    ))}
+                    {otherGoals.map((g) => {
+                      const current = camp.dailyEntries.reduce((sum, e) => sum + (e.values.find((v) => v.name === g.name)?.value ?? 0), 0)
+                      return (
+                        <div key={g.id}><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> {g.name}</div>
+                          <ProgressBar value={current} target={g.value} color={colorFor(g.name)} /></div>
+                      )
+                    })}
                   </div>
                 )}
 

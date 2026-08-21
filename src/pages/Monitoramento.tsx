@@ -1284,6 +1284,13 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     reload()
   }
 
+  function editEntry(campId: string, entry: CampaignMetricEntry) {
+    const customValues: Record<string, string> = {}
+    for (const v of entry.values) customValues[v.name] = String(v.value)
+    setMetricForms((prev) => ({ ...prev, [campId]: { date: entry.date, reach: entry.reach ? String(entry.reach) : '', interactions: entry.interactions ? String(entry.interactions) : '', showInChart: entry.showInChart, customValues } }))
+    setExpandedMetrics((p) => ({ ...p, [campId]: true }))
+  }
+
   async function toggleEntryInChart(campId: string, entry: CampaignMetricEntry) {
     const valores = entry.values.map((v) => ({ nome: v.name, valor: v.value }))
     await api.campaigns.addMetric(campId, { data: entry.date, alcance: entry.reach, interacoes: entry.interactions, mostrarGrafico: !entry.showInChart, valores }).catch(console.error)
@@ -1535,7 +1542,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                         ))}
                         <button onClick={() => addMetricEntry(camp.id)} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
                           style={{ background: '#7D1AD7' }}>
-                          <Plus size={12} /> Registrar
+                          {camp.dailyEntries.some((e) => e.date === mf.date) ? <><Edit2 size={12} /> Salvar alterações</> : <><Plus size={12} /> Registrar</>}
                         </button>
                       </div>
                       <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
@@ -1580,6 +1587,11 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                                 <span key={v.name} style={{ color: colorFor(v.name) }}>{v.name}: {v.value.toLocaleString('pt-BR')}</span>
                               ))}
                               <div className="flex items-center gap-1.5">
+                                <button onClick={() => editEntry(camp.id, entry)}
+                                  className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]"
+                                  title="Editar registro">
+                                  <Edit2 size={15} />
+                                </button>
                                 <button onClick={() => toggleEntryInChart(camp.id, entry)}
                                   className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
                                   style={{ color: entry.showInChart ? '#7D1AD7' : '#8A8A9A', background: entry.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}

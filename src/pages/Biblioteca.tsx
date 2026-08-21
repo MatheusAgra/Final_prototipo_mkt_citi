@@ -397,7 +397,7 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
     setPosts((prev) => {
       const idx = prev.findIndex((p) => p.id === post.id)
       if (idx >= 0) return prev.map((p, i) => i === idx ? post : p)
-      return [...prev, post]
+      return [post, ...prev]
     })
   }
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   BookOpen, FileText, MessageSquare, Download, Star, Copy, Check,
   ChevronLeft, ChevronRight, ChevronDown, Hash, Eye, Plus, Edit2, Trash2, X, Search, Link as LinkIcon,
-  BarChart2, Calendar, Users2, Percent,
+  Calendar,
 } from 'lucide-react'
 import type { Channel } from '../App'
 import type { ChannelType, Prompt, Material, Post, PostMedia } from '../data'
@@ -478,7 +478,7 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                     )}
                   </div>
                 )}
-                <h3 className="text-sm font-semibold text-[#F0F0F5] mb-1.5 leading-snug">{post.title}</h3>
+                <h3 className="text-base font-semibold text-[#F0F0F5] mb-2 leading-snug text-center">{post.title}</h3>
                 {post.linkUrl && (
                   <a href={post.linkUrl} target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-[#7D1AD7] hover:underline mb-2">
@@ -493,14 +493,13 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                 )}
                 <div className="mt-4 pt-3 grid grid-cols-3 gap-2 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                   {[
-                    { label: 'Alcance', value: post.insights.reach, suffix: '', icon: Eye },
-                    { label: 'Engajamento', value: post.insights.engagement, suffix: '', icon: BarChart2 },
+                    { label: 'Alcance', value: post.insights.reach, suffix: '' },
+                    { label: 'Engajamento', value: post.insights.engagement, suffix: '' },
                     post.channel === 'linkedin'
-                      ? { label: 'CTR', value: post.ctr ?? 0, suffix: '%', icon: Percent }
-                      : { label: 'Visitas ao perfil', value: post.profileVisits ?? 0, suffix: '', icon: Users2 },
+                      ? { label: 'CTR', value: post.ctr ?? 0, suffix: '%' }
+                      : { label: 'Visitas ao perfil', value: post.profileVisits ?? 0, suffix: '' },
                   ].map((kpi) => (
-                    <div key={kpi.label} className="flex flex-col items-center gap-0.5">
-                      <kpi.icon size={12} className="text-[#7D1AD7] mb-0.5" />
+                    <div key={kpi.label}>
                       <div className="text-sm font-semibold text-[#F0F0F5]">{kpi.value.toLocaleString('pt-BR')}{kpi.suffix}</div>
                       <div className="text-xs text-[#555566]">{kpi.label}</div>
                     </div>

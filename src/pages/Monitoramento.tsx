@@ -1568,8 +1568,10 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                         <>
                           {camp.goals.length > 0 && (
                             <button onClick={() => setGoalLinesVisible((p) => ({ ...p, [camp.id]: !goalLinesOn }))}
-                              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all mb-2 w-fit"
-                              style={{ color: goalLinesOn ? '#7D1AD7' : '#8A8A9A', background: goalLinesOn ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}>
+                              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all mb-2 w-fit hover:border-[rgba(255,255,255,0.2)]"
+                              style={goalLinesOn
+                                ? { background: 'rgba(125,26,215,0.08)', color: '#7D1AD7', border: '1.5px solid rgba(125,26,215,0.3)' }
+                                : { background: 'rgba(255,255,255,0.03)', color: '#8A8A9A', border: '1.5px solid rgba(255,255,255,0.1)' }}>
                               {goalLinesOn ? <Eye size={13} /> : <EyeOff size={13} />} Linhas de meta no gráfico
                             </button>
                           )}

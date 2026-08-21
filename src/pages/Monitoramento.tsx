@@ -1389,7 +1389,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
             <div className="mt-5 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <label className="block text-xs font-medium text-[#8A8A9A] mb-2 flex items-center gap-1.5"><Target size={12} className="text-[#7D1AD7]" /> Metas da campanha (opcional)</label>
-              <p className="text-xs text-[#555566] mb-3">Crie quantas metas quiser, com qualquer insight (Alcance, CTR, Leads...). Escolha se cada uma deve aparecer no gráfico de métricas diárias.</p>
+              <p className="text-xs text-[#555566] mb-3">Crie quantas metas quiser, com qualquer insight (Alcance, CTR, Leads...).</p>
               <div className="flex gap-3 items-end flex-wrap mb-3">
                 <div className="flex-1 min-w-32">
                   <label className="block text-xs text-[#8A8A9A] mb-1">Nome do insight</label>
@@ -1406,11 +1406,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   {(editingCampaign ? editingLiveGoalId : editingGoalIndex !== null) ? <><Edit2 size={12} /> Salvar meta</> : <><Plus size={12} /> Adicionar meta</>}
                 </button>
               </div>
-              <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
-                <input type="checkbox" checked={newGoal.showInChart} onChange={(e) => setNewGoal((g) => ({ ...g, showInChart: e.target.checked }))}
-                  className="accent-[#7D1AD7]" />
-                Mostrar esta meta no gráfico de métricas diárias
-              </label>
               {editingCampaign ? (
                 editingCampaign.goals.length > 0 ? (
                   <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>

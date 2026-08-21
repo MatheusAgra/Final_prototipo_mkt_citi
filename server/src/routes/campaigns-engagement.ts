@@ -5,16 +5,23 @@ import { ApiError, asyncRoute } from '../http.js'
 import { authenticate, managerOnly } from '../auth.js'
 
 const campaignGoalBody = z.object({ nome: z.string().trim().min(1), valor: z.number().min(0), mostrarGrafico: z.boolean().default(true) })
-const campaignBodyBase = z.object({ nome: z.string().trim().min(1), status: z.enum(['ATIVA','PLANEJADA','ENCERRADA']), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
+// status não é mais informado pela pessoa: é sempre derivado da data atual em relação a dataInicio/dataFim (ver deriveStatus)
+const campaignBodyBase = z.object({ nome: z.string().trim().min(1), objetivo: z.string().trim().min(1), publico: z.string().trim().min(1), dataInicio: z.coerce.date(), dataFim: z.coerce.date(), canais: z.array(z.enum(['INSTAGRAM','LINKEDIN','SITE','EMAIL'])).min(1) })
 // .partial() não é suportado em schemas com .refine() (Zod v4) — o PATCH usa campaignBodyBase.partial() e valida a ordem das datas manualmente após o parse
 // metas é aceito só na criação: permite já nascer com as metas personalizadas escolhidas no próprio formulário de "Nova Campanha"
 const campaignBody = campaignBodyBase.extend({ metas: z.array(campaignGoalBody).optional().default([]) }).refine((value) => value.dataFim >= value.dataInicio, { message: 'dataFim deve ser posterior à dataInicio' })
 const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const }, include: { valores: true } }, metas: { orderBy: { ordem: 'asc' as const } } } as const
+const deriveStatus = (dataInicio: Date, dataFim: Date) => {
+  const now = Date.now()
+  if (now < new Date(dataInicio).getTime()) return 'PLANEJADA'
+  if (now > new Date(dataFim).getTime()) return 'ENCERRADA'
+  return 'ATIVA'
+}
 const serializeCampaign = (campaign: any) => {
   const alcanceAtual = campaign.metricasDiarias.reduce((sum: number, metric: any) => sum + metric.alcance, 0)
   const interacoesAtual = campaign.metricasDiarias.reduce((sum: number, metric: any) => sum + metric.interacoes, 0)
   const end = Math.min(Date.now(), new Date(campaign.dataFim).getTime())
-  return { ...campaign, canais: campaign.canais.map((entry: any) => entry.canal), alcanceAtual, interacoesAtual, diasNoAr: Math.max(0, Math.floor((end - new Date(campaign.dataInicio).getTime()) / 86400000)), totalRegistrosMetricas: campaign.metricasDiarias.length }
+  return { ...campaign, status: deriveStatus(campaign.dataInicio, campaign.dataFim), canais: campaign.canais.map((entry: any) => entry.canal), alcanceAtual, interacoesAtual, diasNoAr: Math.max(0, Math.floor((end - new Date(campaign.dataInicio).getTime()) / 86400000)), totalRegistrosMetricas: campaign.metricasDiarias.length }
 }
 
 export const campaignsRouter = Router(); campaignsRouter.use(authenticate)

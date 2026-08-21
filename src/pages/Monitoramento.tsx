@@ -1177,7 +1177,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
   const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; customValues: Record<string, string> }>>({})
-  const emptyCampaignForm = { name: '', objective: '', audience: '', status: 'planejada' as CampaignStatus, startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string }[] }
+  const emptyCampaignForm = { name: '', objective: '', audience: '', startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string }[] }
   const emptyNewGoal = { name: '', value: '' }
   const [form, setForm] = useState(emptyCampaignForm)
   const [newGoal, setNewGoal] = useState(emptyNewGoal)
@@ -1239,7 +1239,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
   function openEdit(camp: Campaign) {
     setEditingId(camp.id)
-    setForm({ name: camp.name, objective: camp.objective, audience: camp.audience, status: camp.status, startDate: camp.startDate, endDate: camp.endDate, channels: camp.channels, goals: [] })
+    setForm({ name: camp.name, objective: camp.objective, audience: camp.audience, startDate: camp.startDate, endDate: camp.endDate, channels: camp.channels, goals: [] })
     setNewGoal(emptyNewGoal)
     setEditingGoalIndex(null)
     setEditingLiveGoalId(null)
@@ -1250,7 +1250,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     if (!form.name.trim()) return
     const payload = {
       nome: form.name,
-      status: form.status.toUpperCase(),
       objetivo: form.objective.trim() || form.name,
       publico: form.audience.trim() || 'Não definido',
       dataInicio: form.startDate || new Date().toISOString().slice(0, 10),
@@ -1355,19 +1354,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
               <div className="col-span-2"><FormField label="Nome *"><Inp value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Ex: Lançamento Q4" /></FormField></div>
               <div className="col-span-2"><FormField label="Objetivo"><Inp value={form.objective} onChange={(v) => setForm((f) => ({ ...f, objective: v }))} placeholder="Gerar awareness para o produto" /></FormField></div>
               <div className="col-span-2"><FormField label="Público-alvo"><Inp value={form.audience} onChange={(v) => setForm((f) => ({ ...f, audience: v }))} placeholder="Gerentes de marketing B2B" /></FormField></div>
-              {editingId && (
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-[#8A8A9A] mb-2">Status</label>
-                  <div className="flex gap-2 flex-wrap">
-                    {(['planejada', 'ativa', 'encerrada'] as CampaignStatus[]).map((s) => (
-                      <button key={s} onClick={() => setForm((f) => ({ ...f, status: s }))} className="filter-pill text-xs px-3 py-1.5 rounded-full font-medium transition-all"
-                        style={form.status === s ? { background: statusStyle[s].color, color: '#0A0A0F' } : { background: statusStyle[s].bg, color: statusStyle[s].color }}>
-                        {statusStyle[s].label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
               <FormField label="Início"><Inp type="date" value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></FormField>
               <FormField label="Término"><Inp type="date" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></FormField>
               <div className="col-span-2">

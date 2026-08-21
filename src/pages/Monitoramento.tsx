@@ -619,6 +619,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
   const [saving, setSaving] = useState(false)
   const [savingAttendance, setSavingAttendance] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [deleteEventId, setDeleteEventId] = useState<string | null>(null)
 
   function loadParticipants() {
     return api.calendar.participants().then((rawParticipants) => {
@@ -704,6 +705,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
   async function deleteEvent(id: string) {
     setEvents((prev) => prev.filter((e) => e.id !== id))
     await api.calendar.remove(id).catch(() => setError('Não foi possível apagar o evento.'))
+    setDeleteEventId(null)
   }
 
   function setCalendarAttendance(eventId: string, userId: string, status: AttendanceStatus) {
@@ -797,7 +799,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
                     <button onClick={() => { setDayDetail(null); openEdit(ev) }} className="text-[#8A8A9A] hover:text-[#F0F0F5]">
                       <Edit2 size={13} />
                     </button>
-                    <button onClick={() => deleteEvent(ev.id)} className="text-[#FF5252] hover:text-[#FF5252]">
+                    <button onClick={() => setDeleteEventId(ev.id)} className="text-[#FF5252] hover:text-[#FF5252]">
                       <X size={13} />
                     </button>
                   </div>
@@ -864,7 +866,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
                             <button onClick={() => openEdit(ev)} className="text-[#8A8A9A] hover:text-[#F0F0F5]">
                               <Edit2 size={11} />
                             </button>
-                            <button onClick={() => deleteEvent(ev.id)} className="text-[#FF5252] hover:text-[#FF5252]">
+                            <button onClick={() => setDeleteEventId(ev.id)} className="text-[#FF5252] hover:text-[#FF5252]">
                               <X size={11} />
                             </button>
                           </div>
@@ -926,7 +928,7 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
                           <p className="text-xs truncate leading-snug" style={{ color: s.color }}>{ev.title}</p>
                           {isManager && ev.attendanceConfirmed && <span className="ml-auto flex-shrink-0"><AttendanceSummary event={ev} compact /></span>}
                         </div>
-                        <button onClick={(e) => { e.stopPropagation(); deleteEvent(ev.id) }} className="flex-shrink-0 opacity-0 group-hover/ev:opacity-100 text-[#FF5252]">
+                        <button onClick={(e) => { e.stopPropagation(); setDeleteEventId(ev.id) }} className="flex-shrink-0 opacity-0 group-hover/ev:opacity-100 text-[#FF5252]">
                           <X size={9} />
                         </button>
                       </div>
@@ -1144,6 +1146,18 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
           </div>
         </Modal>
       )}
+      {deleteEventId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeleteEventId(null)}>
+          <div className="bg-[#17171A] rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="font-semibold text-[#F0F0F5] mb-1">Apagar este evento?</p>
+            <p className="text-sm text-[#8A8A9A] mb-4">Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-2">
+              <button onClick={() => deleteEvent(deleteEventId)} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FF5252] hover:bg-[#E64545]">Apagar</button>
+              <button onClick={() => setDeleteEventId(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-[#8A8A9A] hover:bg-[rgba(255,255,255,0.08)]">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1187,6 +1201,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingCampaign = editingId ? campaigns.find((c) => c.id === editingId) ?? null : null
   const [goalLinesVisible, setGoalLinesVisible] = useState<Record<string, boolean>>({})
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'campaign' | 'goal' | 'metric'; campId: string; id: string; label: string } | null>(null)
 
   function reload() {
     api.campaigns.list().then((rows) => setCampaigns(rows.map(mapCampaign))).catch(console.error)
@@ -1328,6 +1343,14 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     reload()
   }
 
+  async function confirmDeleteAction() {
+    if (!confirmDelete) return
+    if (confirmDelete.kind === 'campaign') await deleteCampaign(confirmDelete.id)
+    else if (confirmDelete.kind === 'goal') await deleteGoalLive(confirmDelete.campId, confirmDelete.id)
+    else await deleteMetricEntry(confirmDelete.campId, confirmDelete.id)
+    setConfirmDelete(null)
+  }
+
   return (
     <div className="h-full overflow-auto p-5">
       <div className="max-w-4xl mx-auto">
@@ -1402,7 +1425,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                             className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]" title="Editar meta">
                             <Edit2 size={14} />
                           </button>
-                          <button onClick={() => deleteGoalLive(editingCampaign.id, g.id)}
+                          <button onClick={() => setConfirmDelete({ kind: 'goal', campId: editingCampaign.id, id: g.id, label: `a meta "${g.name}"` })}
                             className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]" title="Apagar meta">
                             <Trash2 size={14} />
                           </button>
@@ -1485,7 +1508,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                     <button onClick={() => openEdit(camp)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)] transition-all" title="Editar campanha">
                       <Edit2 size={15} />
                     </button>
-                    <button onClick={() => deleteCampaign(camp.id)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#FF5252] hover:bg-[rgba(255,82,82,0.12)] transition-all">
+                    <button onClick={() => setConfirmDelete({ kind: 'campaign', campId: camp.id, id: camp.id, label: `a campanha "${camp.name}" e todos os seus dados` })} className="p-1.5 rounded-lg text-[#555566] hover:text-[#FF5252] hover:bg-[rgba(255,82,82,0.12)] transition-all">
                       <Trash2 size={15} />
                     </button>
                   </div>
@@ -1612,7 +1635,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                                   title={entry.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
                                   {entry.showInChart ? <Eye size={15} /> : <EyeOff size={15} />}
                                 </button>
-                                <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)}
+                                <button onClick={() => entry.id && setConfirmDelete({ kind: 'metric', campId: camp.id, id: entry.id, label: `o registro de ${formatDateBR(entry.date)}` })}
                                   className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]"
                                   title="Apagar registro">
                                   <Trash2 size={15} />
@@ -1633,6 +1656,18 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
           })}
         </div>
       </div>
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmDelete(null)}>
+          <div className="bg-[#17171A] rounded-2xl p-6 shadow-2xl max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="font-semibold text-[#F0F0F5] mb-1">Apagar {confirmDelete.label}?</p>
+            <p className="text-sm text-[#8A8A9A] mb-4">Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-2">
+              <button onClick={confirmDeleteAction} className="px-4 py-2 rounded-xl text-sm font-medium text-white bg-[#FF5252] hover:bg-[#E64545]">Apagar</button>
+              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 rounded-xl text-sm font-medium text-[#8A8A9A] hover:bg-[rgba(255,255,255,0.08)]">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

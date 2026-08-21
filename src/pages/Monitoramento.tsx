@@ -1152,10 +1152,10 @@ function CalendarView({ currentUserId, isManager }: { currentUserId: string; isM
 function ProgressBar({ value, target, color }: { value: number; target: number; color: string }) {
   const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0
   return (
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span style={{ color: '#8A8A9A' }}>{value.toLocaleString('pt-BR')}</span>
-        <span style={{ color: '#555566' }}>meta: {target.toLocaleString('pt-BR')}</span>
+    <div className="min-w-0">
+      <div className="flex justify-between gap-1.5 text-xs mb-1">
+        <span className="truncate" style={{ color: '#8A8A9A' }}>{value.toLocaleString('pt-BR')}</span>
+        <span className="truncate flex-shrink-0" style={{ color: '#555566' }}>meta: {target.toLocaleString('pt-BR')}</span>
       </div>
       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
@@ -1480,6 +1480,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const alcanceGoal = camp.goals.find((g) => g.name.trim().toLowerCase() === 'alcance')
             const interacoesGoal = camp.goals.find((g) => ['interações', 'interacoes'].includes(g.name.trim().toLowerCase()))
             const otherGoals = camp.goals.filter((g) => g !== alcanceGoal && g !== interacoesGoal)
+            const visibleGoalsCount = (alcanceGoal ? 1 : 0) + (interacoesGoal ? 1 : 0) + otherGoals.length
             const chartSeries = ['reach', 'interactions', ...otherGoals.map((g) => g.name)]
             const colorFor = (key: string) => GOAL_COLORS[Math.max(0, chartSeries.indexOf(key)) % GOAL_COLORS.length]
             const goalKey = (g: CampaignGoal) => (g === alcanceGoal ? 'reach' : g === interacoesGoal ? 'interactions' : g.name)
@@ -1506,7 +1507,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {camp.daysRunning > 0 && (
                       <span className="text-xs" style={{ color: '#555566' }}>
-                        <span style={{ color: '#7D1AD7', fontWeight: 600 }}>{camp.daysRunning}</span>d no ar
+                        <span style={{ color: '#7D1AD7', fontWeight: 600 }}>{camp.daysRunning}</span> d no ar
                       </span>
                     )}
                     <button onClick={() => openEdit(camp)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)] transition-all" title="Editar campanha">
@@ -1523,20 +1524,20 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
                 </div>
 
-                {camp.status !== 'planejada' && camp.goals.length > 0 && (
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
+                {camp.status !== 'planejada' && visibleGoalsCount > 0 && (
+                  <div className="grid gap-y-3 mb-4" style={{ gridTemplateColumns: `repeat(${visibleGoalsCount}, minmax(0, 1fr))`, columnGap: visibleGoalsCount > 4 ? 12 : 24 }}>
                     {alcanceGoal && (
-                      <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> Alcance</div>
+                      <div className="min-w-0"><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1 truncate"><Target size={11} className="flex-shrink-0" /> Alcance</div>
                         <ProgressBar value={camp.reach} target={alcanceGoal.value} color={colorFor('reach')} /></div>
                     )}
                     {interacoesGoal && (
-                      <div><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><BarChart2 size={11} /> Interações</div>
+                      <div className="min-w-0"><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1 truncate"><BarChart2 size={11} className="flex-shrink-0" /> Interações</div>
                         <ProgressBar value={camp.interactions} target={interacoesGoal.value} color={colorFor('interactions')} /></div>
                     )}
                     {otherGoals.map((g) => {
                       const current = camp.dailyEntries.reduce((sum, e) => sum + (e.values.find((v) => v.name === g.name)?.value ?? 0), 0)
                       return (
-                        <div key={g.id}><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1"><Target size={11} /> {g.name}</div>
+                        <div key={g.id} className="min-w-0"><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1 truncate"><Target size={11} className="flex-shrink-0" /> {g.name}</div>
                           <ProgressBar value={current} target={g.value} color={colorFor(g.name)} /></div>
                       )
                     })}

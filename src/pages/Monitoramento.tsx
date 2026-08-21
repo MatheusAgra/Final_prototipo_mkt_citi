@@ -1534,31 +1534,31 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   {expanded && (
                     <div className="px-4 pb-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                       {/* Add entry form */}
-                      <div className="pt-3 pb-3 flex gap-3 items-end flex-wrap">
-                        <div className="flex-1 min-w-32">
-                          <label className="block text-xs text-[#8A8A9A] mb-1">Data</label>
+                      <div className="pt-3 pb-3 flex gap-2 items-end">
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-xs text-[#8A8A9A] mb-1 truncate">Data</label>
                           <input type="date" value={mf.date} onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, date: e.target.value } }))}
                             className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
                         </div>
-                        <div className="flex-1 min-w-24">
-                          <label className="block text-xs text-[#8A8A9A] mb-1">Alcance</label>
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-xs text-[#8A8A9A] mb-1 truncate">Alcance</label>
                           <input type="number" value={mf.reach} onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, reach: e.target.value } }))}
                             placeholder="0" className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
                         </div>
-                        <div className="flex-1 min-w-24">
-                          <label className="block text-xs text-[#8A8A9A] mb-1">Interações</label>
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-xs text-[#8A8A9A] mb-1 truncate">Interações</label>
                           <input type="number" value={mf.interactions} onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, interactions: e.target.value } }))}
                             placeholder="0" className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
                         </div>
                         {otherGoals.map((g) => (
-                          <div key={g.id} className="flex-1 min-w-24">
-                            <label className="block text-xs text-[#8A8A9A] mb-1">{g.name}</label>
+                          <div key={g.id} className="flex-1 min-w-0">
+                            <label className="block text-xs text-[#8A8A9A] mb-1 truncate">{g.name}</label>
                             <input type="number" value={mf.customValues[g.name] ?? ''}
                               onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, customValues: { ...mf.customValues, [g.name]: e.target.value } } }))}
                               placeholder="0" className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
                           </div>
                         ))}
-                        <button onClick={() => addMetricEntry(camp.id)} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
+                        <button onClick={() => addMetricEntry(camp.id)} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow flex-shrink-0 whitespace-nowrap"
                           style={{ background: '#7D1AD7' }}>
                           {camp.dailyEntries.some((e) => e.date === mf.date) ? <><Edit2 size={12} /> Salvar alterações</> : <><Plus size={12} /> Registrar</>}
                         </button>

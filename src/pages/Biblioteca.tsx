@@ -470,13 +470,14 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                     até {post.validUntil.slice(5).split('-').reverse().join('/')}
                   </span>
                 </div>
+                <h3 className="text-sm font-semibold text-[#F0F0F5] mb-1.5 leading-snug">{post.title}</h3>
                 {post.linkUrl && (
                   <a href={post.linkUrl} target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-[#7D1AD7] hover:underline mb-2">
                     <LinkIcon size={11} /> Ver post original
                   </a>
                 )}
-                <p className="text-sm text-[#F0F0F5] leading-relaxed whitespace-pre-line flex-1">{caption}</p>
+                <p className="text-sm text-[#8A8A9A] leading-relaxed whitespace-pre-line flex-1">{caption}</p>
                 {post.caption.length > 120 && (
                   <button onClick={() => toggleExpand(post.id)} className="text-xs text-[#7D1AD7] hover:text-[#7D1AD7] mt-1 text-left">
                     {isExpanded ? 'Ver menos' : 'Ver mais'}

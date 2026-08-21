@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings, Eye, EyeOff,
+  Plus, Calendar, Columns3, Users, Target, Edit2, Check, X, Settings,
   Clock, Flame, Trash2, BarChart2, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import {
@@ -1567,13 +1567,11 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                       {chartData.length > 0 && (
                         <>
                           {camp.goals.length > 0 && (
-                            <button onClick={() => setGoalLinesVisible((p) => ({ ...p, [camp.id]: !goalLinesOn }))}
-                              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition-all mb-2 w-fit hover:border-[rgba(255,255,255,0.2)]"
-                              style={goalLinesOn
-                                ? { background: 'rgba(125,26,215,0.08)', color: '#7D1AD7', border: '1.5px solid rgba(125,26,215,0.3)' }
-                                : { background: 'rgba(255,255,255,0.03)', color: '#8A8A9A', border: '1.5px solid rgba(255,255,255,0.1)' }}>
-                              {goalLinesOn ? <Eye size={13} /> : <EyeOff size={13} />} Linhas de meta no gráfico
-                            </button>
+                            <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
+                              <input type="checkbox" checked={goalLinesOn} onChange={(e) => setGoalLinesVisible((p) => ({ ...p, [camp.id]: e.target.checked }))}
+                                className="accent-[#7D1AD7]" />
+                              Mostrar linhas de meta no gráfico
+                            </label>
                           )}
                           <div style={{ height: 160, marginBottom: 12 }}>
                             <ResponsiveContainer width="100%" height="100%">

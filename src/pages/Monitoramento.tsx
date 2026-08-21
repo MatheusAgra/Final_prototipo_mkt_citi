@@ -12,6 +12,7 @@ import type { KanbanColumn, Task, TaskAssignee, ChannelType, Campaign, CampaignS
 import { type Difficulty } from '../data'
 import { api } from '../api'
 import BrandMark from '../BrandMark'
+import { formatDateBR } from '../dateUtils'
 
 interface TaskMember {
   id: string
@@ -517,7 +518,7 @@ function KanbanBoard({ channel, setChannel, isManager, members, setMembers, colu
                         </div>
                         {task.dueDate && (
                           <span className="text-xs" style={{ color: '#555566' }}>
-                            {task.dueDate.slice(5).split('-').reverse().join('/')}
+                            {formatDateBR(task.dueDate)}
                           </span>
                         )}
                       </div>
@@ -1457,7 +1458,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const goalKey = (g: CampaignGoal) => (g === alcanceGoal ? 'reach' : g === interacoesGoal ? 'interactions' : g.name)
             // 0 significa "não preenchido" nesse registro — não plotamos o ponto para não sugerir que o valor real foi zero
             const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => {
-              const row: Record<string, string | number> = { date: e.date.slice(5) }
+              const row: Record<string, string | number> = { date: `${e.date.slice(8, 10)}/${e.date.slice(5, 7)}` }
               if (e.reach !== 0) row.reach = e.reach
               if (e.interactions !== 0) row.interactions = e.interactions
               for (const v of e.values) row[v.name] = v.value
@@ -1492,7 +1493,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
                 <div className="flex gap-1.5 mb-4">
                   {camp.channels.map((ch) => <ChannelBadge key={ch} ch={ch} small />)}
-                  <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
+                  <span className="text-xs text-[#555566] ml-1">{formatDateBR(camp.startDate)} → {formatDateBR(camp.endDate)}</span>
                 </div>
 
                 {visibleGoalsCount > 0 && (
@@ -1593,7 +1594,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                           {camp.dailyEntries.map((entry, i) => (
                             <div key={entry.date} className="flex items-center justify-between px-3 py-2 text-xs group"
                               style={{ background: i % 2 === 0 ? '#202024' : '#17171A', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
-                              <span style={{ color: '#8A8A9A' }}>{entry.date}</span>
+                              <span style={{ color: '#8A8A9A' }}>{formatDateBR(entry.date)}</span>
                               {entry.reach !== 0 && <span style={{ color: colorFor('reach') }}>Alcance: {entry.reach.toLocaleString('pt-BR')}</span>}
                               {entry.interactions !== 0 && <span style={{ color: colorFor('interactions') }}>Interações: {entry.interactions.toLocaleString('pt-BR')}</span>}
                               {entry.values.filter((v) => v.value !== 0).map((v) => (

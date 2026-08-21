@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { ApiError, asyncRoute } from '../http.js'
 import { authenticate, managerOnly } from '../auth.js'
+import { brToday, utcDateStr, brMonthBounds } from '../dateUtils.js'
 
 const campaignGoalBody = z.object({ nome: z.string().trim().min(1), valor: z.number().min(0), mostrarGrafico: z.boolean().default(true) })
 // status não é mais informado pela pessoa: é sempre derivado da data atual em relação a dataInicio/dataFim (ver deriveStatus)
@@ -11,15 +12,8 @@ const campaignBodyBase = z.object({ nome: z.string().trim().min(1), objetivo: z.
 // metas é aceito só na criação: permite já nascer com as metas personalizadas escolhidas no próprio formulário de "Nova Campanha"
 const campaignBody = campaignBodyBase.extend({ metas: z.array(campaignGoalBody).optional().default([]) }).refine((value) => value.dataFim >= value.dataInicio, { message: 'dataFim deve ser posterior à dataInicio' })
 const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const }, include: { valores: true } }, metas: { orderBy: { ordem: 'asc' as const } } } as const
-// dataInicio/dataFim nascem de um input tipo "date" (ex.: "2026-08-21") coagido para meia-noite UTC —
-// o dia de calendário pretendido é a própria data UTC armazenada, não deve ser reconvertida para outro
-// fuso (isso a deslocaria um dia para trás). Já "agora" é um instante real e precisa virar o dia de
-// calendário certo no fuso de Brasília, senão à noite no horário local o relógio UTC já virou o dia
-// seguinte e uma campanha com início "amanhã" aparecia como já ativa.
-const utcDateStr = (value: Date) => new Date(value).toISOString().slice(0, 10)
-const brTodayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 const deriveStatus = (dataInicio: Date, dataFim: Date) => {
-  const today = brTodayStr()
+  const today = brToday()
   if (today < utcDateStr(dataInicio)) return 'PLANEJADA'
   if (today > utcDateStr(dataFim)) return 'ENCERRADA'
   return 'ATIVA'
@@ -73,7 +67,7 @@ campaignsRouter.patch('/:id/goals/:goalId',asyncRoute(async(req,res)=>{
 campaignsRouter.delete('/:id/goals/:goalId',asyncRoute(async(req,res)=>{await prisma.campaignGoal.delete({where:{id:String(req.params.goalId)}});res.status(204).send()}))
 
 export const engagementRouter = Router(); engagementRouter.use(authenticate,managerOnly)
-const monthBounds=(period:string)=>{if(!/^\d{4}-\d{2}$/.test(period))throw new ApiError(422,'INVALID_PERIOD');const start=new Date(`${period}-01T00:00:00.000Z`);const end=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,1));return{start,end}}
+const monthBounds=(period:string)=>{if(!/^\d{4}-\d{2}$/.test(period))throw new ApiError(422,'INVALID_PERIOD');return brMonthBounds(period)}
 const manualCriterionWhere={nome:{notIn:['Pontualidade','Presença']}}
 const eventEnd=(event:{data:Date;horario:string;horarioFim:string|null})=>{
   const date=event.data.toISOString().slice(0,10)

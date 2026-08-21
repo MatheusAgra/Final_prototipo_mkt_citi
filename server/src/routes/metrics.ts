@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { asyncRoute } from '../http.js'
 import { authenticate } from '../auth.js'
+import { brWeekBounds } from '../dateUtils.js'
 
 // Métricas são estado compartilhado: qualquer conta autenticada pode consultar e atualizar.
 const managerOnly = authenticate
@@ -26,7 +27,7 @@ const dashboardPayload=async(plataforma:'INSTAGRAM'|'LINKEDIN')=>{
     ...decoratedFormatos.filter((f)=>f.idadeDias>STALE_THRESHOLD_DAYS).map((f)=>({nome:f.formato,idadeDias:f.idadeDias})),
     ...(distribution&&Math.floor((Date.now()-distribution.updatedAt.getTime())/86400000)>STALE_THRESHOLD_DAYS?[{nome:'Distribuição de alcance',idadeDias:Math.floor((Date.now()-distribution.updatedAt.getTime())/86400000)}]:[]),
   ]
-  const today=new Date();const day=(today.getUTCDay()+6)%7;const start=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),today.getUTCDate()-day));const end=new Date(start.getTime()+7*86400000)
+  const {start,end}=brWeekBounds()
   const aggregate=await prisma.post.aggregate({where:{canal:plataforma,dataPublicacao:{gte:start,lt:end}},_sum:{alcance:true}})
   return{plataforma,desatualizadas:{count:staleItems.length,itens:staleItems},kpis:decoratedKpis,alcanceSemanal:aggregate._sum.alcance??0,alcanceSeguidores:distribution?{seguidores:distribution.principalPct,naoSeguidores:distribution.secundarioPct}:null,formatos:decoratedFormatos,funilStories,heatmap}
 }

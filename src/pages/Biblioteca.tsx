@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import {
   BookOpen, FileText, MessageSquare, Download, Star, Copy, Check,
   ChevronLeft, ChevronRight, ChevronDown, Hash, Eye, Plus, Edit2, Trash2, X, Search, Link as LinkIcon,
-  Calendar,
 } from 'lucide-react'
 import type { Channel } from '../App'
 import type { ChannelType, Prompt, Material, Post, PostMedia } from '../data'
@@ -466,19 +465,12 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                 </div>
               </div>
               <div className="p-4 flex flex-col flex-1">
-                {(post.campaign || post.validUntil) && (
-                  <div className="flex items-center justify-between gap-2 mb-2.5">
-                    {post.campaign
-                      ? <span className="text-xs px-2 py-0.5 rounded-full font-medium truncate" style={{ background: 'rgba(255,255,255,0.06)', color: '#8A8A9A' }}>{post.campaign}</span>
-                      : <span />}
-                    {post.validUntil && (
-                      <span className="flex items-center gap-1 text-xs text-[#555566] flex-shrink-0">
-                        <Calendar size={11} /> até {post.validUntil.slice(5).split('-').reverse().join('/')}
-                      </span>
-                    )}
+                {post.campaign && (
+                  <div className="mb-2.5">
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium truncate" style={{ background: 'rgba(255,255,255,0.06)', color: '#8A8A9A' }}>{post.campaign}</span>
                   </div>
                 )}
-                <h3 className="text-base font-semibold text-[#F0F0F5] mb-2 leading-snug text-center">{post.title}</h3>
+                <h3 className="text-base font-semibold text-[#F0F0F5] mb-2 leading-snug">{post.title}</h3>
                 {post.linkUrl && (
                   <a href={post.linkUrl} target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-[#7D1AD7] hover:underline mb-2">

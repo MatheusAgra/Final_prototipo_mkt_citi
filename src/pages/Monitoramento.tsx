@@ -1177,10 +1177,12 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
   const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; showInChart: boolean; customValues: Record<string, string> }>>({})
-  const emptyCampaignForm = { name: '', objective: '', audience: '', startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string; showInChart: boolean }[] }
+  const emptyCampaignForm = { name: '', objective: '', audience: '', status: 'planejada' as CampaignStatus, startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string; showInChart: boolean }[] }
   const emptyNewGoal = { name: '', value: '', showInChart: true }
   const [form, setForm] = useState(emptyCampaignForm)
   const [newGoal, setNewGoal] = useState(emptyNewGoal)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editingCampaign = editingId ? campaigns.find((c) => c.id === editingId) ?? null : null
 
   function reload() {
     api.campaigns.list().then((rows) => setCampaigns(rows.map(mapCampaign))).catch(console.error)
@@ -1203,28 +1205,74 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     setForm((f) => ({ ...f, goals: f.goals.filter((_, i) => i !== index) }))
   }
 
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(emptyCampaignForm)
+    setNewGoal(emptyNewGoal)
+  }
+
+  function openCreate() {
+    setEditingId(null)
+    setForm(emptyCampaignForm)
+    setNewGoal(emptyNewGoal)
+    setShowForm(true)
+  }
+
+  function openEdit(camp: Campaign) {
+    setEditingId(camp.id)
+    setForm({ name: camp.name, objective: camp.objective, audience: camp.audience, status: camp.status, startDate: camp.startDate, endDate: camp.endDate, channels: camp.channels, goals: [] })
+    setNewGoal(emptyNewGoal)
+    setShowForm(true)
+  }
+
   async function submitCampaign() {
     if (!form.name.trim()) return
-    const created = await api.campaigns.create({
+    const payload = {
       nome: form.name,
-      status: 'PLANEJADA',
+      status: form.status.toUpperCase(),
       objetivo: form.objective.trim() || form.name,
       publico: form.audience.trim() || 'Não definido',
       dataInicio: form.startDate || new Date().toISOString().slice(0, 10),
       dataFim: form.endDate || new Date().toISOString().slice(0, 10),
       canais: (form.channels.length ? form.channels : (['instagram'] as ChannelType[])).map((ch) => CHANNEL_TO_API[ch]),
+    }
+    if (editingId) {
+      const updated = await api.campaigns.update(editingId, payload).catch((cause) => { console.error(cause); return null })
+      if (!updated) return
+      setCampaigns((prev) => prev.map((c) => c.id === editingId ? mapCampaign(updated) : c))
+      closeForm()
+      return
+    }
+    const created = await api.campaigns.create({
+      ...payload,
       metas: form.goals.map((g) => ({ nome: g.name.trim(), valor: parseFloat(g.value) || 0, mostrarGrafico: g.showInChart })),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
     setCampaigns((prev) => [mapCampaign(created), ...prev])
-    setShowForm(false)
-    setForm(emptyCampaignForm)
-    setNewGoal(emptyNewGoal)
+    closeForm()
   }
 
   async function deleteCampaign(id: string) {
     setCampaigns((prev) => prev.filter((c) => c.id !== id))
     await api.campaigns.remove(id).catch((cause) => { console.error(cause); reload() })
+  }
+
+  async function addGoalLive(campId: string) {
+    if (!newGoal.name.trim() || !newGoal.value) return
+    await api.campaigns.addGoal(campId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+    setNewGoal(emptyNewGoal)
+    reload()
+  }
+
+  async function toggleGoalInChart(campId: string, goal: CampaignGoal) {
+    await api.campaigns.updateGoal(campId, goal.id, { mostrarGrafico: !goal.showInChart }).catch(console.error)
+    reload()
+  }
+
+  async function deleteGoalLive(campId: string, goalId: string) {
+    await api.campaigns.removeGoal(campId, goalId).catch(console.error)
+    reload()
   }
 
   async function addMetricEntry(campId: string) {
@@ -1258,7 +1306,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             </div>
             <ChannelFilter channel={channel} setChannel={setChannel} />
           </div>
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl text-white transition-all hover:opacity-90 btn-glow"
+          <button onClick={openCreate} className="flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl text-white transition-all hover:opacity-90 btn-glow"
             style={{ background: 'linear-gradient(135deg, #7D1AD7, #50E678)' }}>
             <Plus size={16} /> Nova Campanha
           </button>
@@ -1267,13 +1315,26 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
         {showForm && (
           <div className="bg-[#17171A] rounded-2xl p-6 mb-5" style={{ border: '1.5px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-[#F0F0F5]">Nova Campanha</h3>
-              <button onClick={() => setShowForm(false)} className="text-[#555566] hover:text-[#8A8A9A]"><X size={18} /></button>
+              <h3 className="font-semibold text-[#F0F0F5]">{editingId ? 'Editar Campanha' : 'Nova Campanha'}</h3>
+              <button onClick={closeForm} className="text-[#555566] hover:text-[#8A8A9A]"><X size={18} /></button>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2"><FormField label="Nome *"><Inp value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="Ex: Lançamento Q4" /></FormField></div>
               <div className="col-span-2"><FormField label="Objetivo"><Inp value={form.objective} onChange={(v) => setForm((f) => ({ ...f, objective: v }))} placeholder="Gerar awareness para o produto" /></FormField></div>
               <div className="col-span-2"><FormField label="Público-alvo"><Inp value={form.audience} onChange={(v) => setForm((f) => ({ ...f, audience: v }))} placeholder="Gerentes de marketing B2B" /></FormField></div>
+              {editingId && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-[#8A8A9A] mb-2">Status</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {(['planejada', 'ativa', 'encerrada'] as CampaignStatus[]).map((s) => (
+                      <button key={s} onClick={() => setForm((f) => ({ ...f, status: s }))} className="filter-pill text-xs px-3 py-1.5 rounded-full font-medium transition-all"
+                        style={form.status === s ? { background: statusStyle[s].color, color: '#0A0A0F' } : { background: statusStyle[s].bg, color: statusStyle[s].color }}>
+                        {statusStyle[s].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <FormField label="Início"><Inp type="date" value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} /></FormField>
               <FormField label="Término"><Inp type="date" value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} /></FormField>
               <div className="col-span-2">
@@ -1303,7 +1364,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <input type="number" value={newGoal.value} onChange={(e) => setNewGoal((g) => ({ ...g, value: e.target.value }))}
                     placeholder="0" className="w-full text-xs px-2.5 py-2 rounded-lg border border-[rgba(255,255,255,0.1)] focus:outline-none focus:border-[#7D1AD7]" />
                 </div>
-                <button onClick={addFormGoal} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
+                <button onClick={() => editingCampaign ? addGoalLive(editingCampaign.id) : addFormGoal()} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
                   style={{ background: '#7D1AD7' }}>
                   <Plus size={12} /> Adicionar meta
                 </button>
@@ -1313,7 +1374,33 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   className="accent-[#7D1AD7]" />
                 Mostrar esta meta no gráfico de métricas diárias
               </label>
-              {form.goals.length > 0 && (
+              {editingCampaign ? (
+                editingCampaign.goals.length > 0 ? (
+                  <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {editingCampaign.goals.map((g, i) => (
+                      <div key={g.id} className="flex items-center justify-between px-3 py-2 text-xs"
+                        style={{ background: i % 2 === 0 ? '#202024' : '#17171A', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
+                        <span style={{ color: '#F0F0F5' }}>{g.name}</span>
+                        <span style={{ color: '#8A8A9A' }}>Meta: {g.value.toLocaleString('pt-BR')}</span>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => toggleGoalInChart(editingCampaign.id, g)}
+                            className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
+                            style={{ color: g.showInChart ? '#7D1AD7' : '#8A8A9A', background: g.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
+                            title={g.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
+                            {g.showInChart ? <Eye size={14} /> : <EyeOff size={14} />}
+                          </button>
+                          <button onClick={() => deleteGoalLive(editingCampaign.id, g.id)}
+                            className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]" title="Apagar meta">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-[#555566] text-center py-2">Nenhuma meta criada ainda</p>
+                )
+              ) : form.goals.length > 0 && (
                 <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
                   {form.goals.map((g, i) => (
                     <div key={i} className="flex items-center justify-between px-3 py-2 text-xs"
@@ -1332,8 +1419,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
             <div className="flex gap-3 mt-5 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <button onClick={submitCampaign} className="px-5 py-2 rounded-xl text-sm font-medium text-white hover:opacity-90 btn-glow"
-                style={{ background: 'linear-gradient(135deg, #7D1AD7, #50E678)' }}>Criar Campanha</button>
-              <button onClick={() => { setShowForm(false); setForm(emptyCampaignForm); setNewGoal(emptyNewGoal) }} className="px-4 py-2 rounded-xl text-sm font-medium text-[#8A8A9A] hover:bg-[rgba(255,255,255,0.08)]">Cancelar</button>
+                style={{ background: 'linear-gradient(135deg, #7D1AD7, #50E678)' }}>{editingId ? 'Salvar alterações' : 'Criar Campanha'}</button>
+              <button onClick={closeForm} className="px-4 py-2 rounded-xl text-sm font-medium text-[#8A8A9A] hover:bg-[rgba(255,255,255,0.08)]">Cancelar</button>
             </div>
           </div>
         )}
@@ -1375,6 +1462,9 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                         <span style={{ color: '#7D1AD7', fontWeight: 600 }}>{camp.daysRunning}</span>d no ar
                       </span>
                     )}
+                    <button onClick={() => openEdit(camp)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)] transition-all" title="Editar campanha">
+                      <Edit2 size={15} />
+                    </button>
                     <button onClick={() => deleteCampaign(camp.id)} className="p-1.5 rounded-lg text-[#555566] hover:text-[#FF5252] hover:bg-[rgba(255,82,82,0.12)] transition-all">
                       <Trash2 size={15} />
                     </button>

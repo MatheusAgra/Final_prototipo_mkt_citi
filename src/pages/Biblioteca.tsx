@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   BookOpen, FileText, MessageSquare, Download, Star, Copy, Check,
   ChevronLeft, ChevronRight, ChevronDown, Hash, Eye, Plus, Edit2, Trash2, X, Search, Link as LinkIcon,
+  BarChart2, Calendar, Users2, Percent,
 } from 'lucide-react'
 import type { Channel } from '../App'
 import type { ChannelType, Prompt, Material, Post, PostMedia } from '../data'
@@ -435,6 +436,7 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                 {media?.tipo === 'video'
                   ? <video src={media.url} className="w-full h-full object-cover" controls />
                   : <img src={media?.url} alt={post.title} className="w-full h-full object-cover" />}
+                <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 20%, transparent 75%, rgba(0,0,0,0.45) 100%)' }} />
                 {post.images.length > 1 && (
                   <>
                     <button onClick={() => setSlide(post.id, Math.max(0, slide - 1))} disabled={slide === 0}
@@ -464,12 +466,18 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                 </div>
               </div>
               <div className="p-4 flex flex-col flex-1">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-[#555566]">{post.campaign}</span>
-                  <span className="text-xs text-[#555566]">
-                    até {post.validUntil.slice(5).split('-').reverse().join('/')}
-                  </span>
-                </div>
+                {(post.campaign || post.validUntil) && (
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    {post.campaign
+                      ? <span className="text-xs px-2 py-0.5 rounded-full font-medium truncate" style={{ background: 'rgba(255,255,255,0.06)', color: '#8A8A9A' }}>{post.campaign}</span>
+                      : <span />}
+                    {post.validUntil && (
+                      <span className="flex items-center gap-1 text-xs text-[#555566] flex-shrink-0">
+                        <Calendar size={11} /> até {post.validUntil.slice(5).split('-').reverse().join('/')}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <h3 className="text-sm font-semibold text-[#F0F0F5] mb-1.5 leading-snug">{post.title}</h3>
                 {post.linkUrl && (
                   <a href={post.linkUrl} target="_blank" rel="noreferrer"
@@ -485,13 +493,14 @@ function PostsView({ channel, setChannel, posts, setPosts }: { channel: Channel;
                 )}
                 <div className="mt-4 pt-3 grid grid-cols-3 gap-2 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
                   {[
-                    { label: 'Alcance', value: post.insights.reach, suffix: '' },
-                    { label: 'Engajamento', value: post.insights.engagement, suffix: '' },
+                    { label: 'Alcance', value: post.insights.reach, suffix: '', icon: Eye },
+                    { label: 'Engajamento', value: post.insights.engagement, suffix: '', icon: BarChart2 },
                     post.channel === 'linkedin'
-                      ? { label: 'CTR', value: post.ctr ?? 0, suffix: '%' }
-                      : { label: 'Visitas ao perfil', value: post.profileVisits ?? 0, suffix: '' },
+                      ? { label: 'CTR', value: post.ctr ?? 0, suffix: '%', icon: Percent }
+                      : { label: 'Visitas ao perfil', value: post.profileVisits ?? 0, suffix: '', icon: Users2 },
                   ].map((kpi) => (
-                    <div key={kpi.label}>
+                    <div key={kpi.label} className="flex flex-col items-center gap-0.5">
+                      <kpi.icon size={12} className="text-[#7D1AD7] mb-0.5" />
                       <div className="text-sm font-semibold text-[#F0F0F5]">{kpi.value.toLocaleString('pt-BR')}{kpi.suffix}</div>
                       <div className="text-xs text-[#555566]">{kpi.label}</div>
                     </div>

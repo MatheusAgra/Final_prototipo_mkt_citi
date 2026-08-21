@@ -1508,7 +1508,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                   <span className="text-xs text-[#555566] ml-1">{camp.startDate} → {camp.endDate}</span>
                 </div>
 
-                {camp.status !== 'planejada' && visibleGoalsCount > 0 && (
+                {visibleGoalsCount > 0 && (
                   <div className="grid gap-y-3 mb-4" style={{ gridTemplateColumns: `repeat(${visibleGoalsCount}, minmax(0, 1fr))`, columnGap: visibleGoalsCount > 4 ? 12 : 24 }}>
                     {alcanceGoal && (
                       <div className="min-w-0"><div className="text-xs font-medium text-[#8A8A9A] mb-1.5 flex items-center gap-1 truncate"><Target size={11} className="flex-shrink-0" /> Alcance</div>

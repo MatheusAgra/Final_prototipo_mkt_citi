@@ -1294,11 +1294,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     setEditingLiveGoalId(goal.id)
   }
 
-  async function toggleGoalInChart(campId: string, goal: CampaignGoal) {
-    await api.campaigns.updateGoal(campId, goal.id, { mostrarGrafico: !goal.showInChart }).catch(console.error)
-    reload()
-  }
-
   async function deleteGoalLive(campId: string, goalId: string) {
     await api.campaigns.removeGoal(campId, goalId).catch(console.error)
     if (editingLiveGoalId === goalId) { setEditingLiveGoalId(null); setNewGoal(emptyNewGoal) }
@@ -1418,12 +1413,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                           <button onClick={() => editGoalLive(g)}
                             className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]" title="Editar meta">
                             <Edit2 size={14} />
-                          </button>
-                          <button onClick={() => toggleGoalInChart(editingCampaign.id, g)}
-                            className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
-                            style={{ color: g.showInChart ? '#7D1AD7' : '#8A8A9A', background: g.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
-                            title={g.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
-                            {g.showInChart ? <Eye size={14} /> : <EyeOff size={14} />}
                           </button>
                           <button onClick={() => deleteGoalLive(editingCampaign.id, g.id)}
                             className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]" title="Apagar meta">

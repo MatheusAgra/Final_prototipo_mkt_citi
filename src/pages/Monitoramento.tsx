@@ -1176,15 +1176,16 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [showForm, setShowForm] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<string, boolean>>({})
-  const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; showInChart: boolean; customValues: Record<string, string> }>>({})
-  const emptyCampaignForm = { name: '', objective: '', audience: '', status: 'planejada' as CampaignStatus, startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string; showInChart: boolean }[] }
-  const emptyNewGoal = { name: '', value: '', showInChart: true }
+  const [metricForms, setMetricForms] = useState<Record<string, { date: string; reach: string; interactions: string; customValues: Record<string, string> }>>({})
+  const emptyCampaignForm = { name: '', objective: '', audience: '', status: 'planejada' as CampaignStatus, startDate: '', endDate: '', channels: [] as ChannelType[], goals: [] as { name: string; value: string }[] }
+  const emptyNewGoal = { name: '', value: '' }
   const [form, setForm] = useState(emptyCampaignForm)
   const [newGoal, setNewGoal] = useState(emptyNewGoal)
   const [editingGoalIndex, setEditingGoalIndex] = useState<number | null>(null)
   const [editingLiveGoalId, setEditingLiveGoalId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingCampaign = editingId ? campaigns.find((c) => c.id === editingId) ?? null : null
+  const [goalLinesVisible, setGoalLinesVisible] = useState<Record<string, boolean>>({})
 
   function reload() {
     api.campaigns.list().then((rows) => setCampaigns(rows.map(mapCampaign))).catch(console.error)
@@ -1265,7 +1266,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     }
     const created = await api.campaigns.create({
       ...payload,
-      metas: form.goals.map((g) => ({ nome: g.name.trim(), valor: parseFloat(g.value) || 0, mostrarGrafico: g.showInChart })),
+      metas: form.goals.map((g) => ({ nome: g.name.trim(), valor: parseFloat(g.value) || 0 })),
     }).catch((cause) => { console.error(cause); return null })
     if (!created) return
     setCampaigns((prev) => [mapCampaign(created), ...prev])
@@ -1280,17 +1281,17 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   async function addGoalLive(campId: string) {
     if (!newGoal.name.trim() || !newGoal.value) return
     if (editingLiveGoalId) {
-      await api.campaigns.updateGoal(campId, editingLiveGoalId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+      await api.campaigns.updateGoal(campId, editingLiveGoalId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0 }).catch(console.error)
       setEditingLiveGoalId(null)
     } else {
-      await api.campaigns.addGoal(campId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+      await api.campaigns.addGoal(campId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0 }).catch(console.error)
     }
     setNewGoal(emptyNewGoal)
     reload()
   }
 
   function editGoalLive(goal: CampaignGoal) {
-    setNewGoal({ name: goal.name, value: String(goal.value), showInChart: goal.showInChart })
+    setNewGoal({ name: goal.name, value: String(goal.value) })
     setEditingLiveGoalId(goal.id)
   }
 
@@ -1304,22 +1305,16 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     const mf = metricForms[campId]
     if (!mf?.date) return
     const valores = Object.entries(mf.customValues ?? {}).filter(([, v]) => v !== '').map(([nome, v]) => ({ nome, valor: parseFloat(v) || 0 }))
-    await api.campaigns.addMetric(campId, { data: mf.date, alcance: parseInt(mf.reach) || 0, interacoes: parseInt(mf.interactions) || 0, mostrarGrafico: mf.showInChart ?? true, valores }).catch(console.error)
-    setMetricForms((prev) => ({ ...prev, [campId]: { date: '', reach: '', interactions: '', showInChart: true, customValues: {} } }))
+    await api.campaigns.addMetric(campId, { data: mf.date, alcance: parseInt(mf.reach) || 0, interacoes: parseInt(mf.interactions) || 0, mostrarGrafico: true, valores }).catch(console.error)
+    setMetricForms((prev) => ({ ...prev, [campId]: { date: '', reach: '', interactions: '', customValues: {} } }))
     reload()
   }
 
   function editEntry(campId: string, entry: CampaignMetricEntry) {
     const customValues: Record<string, string> = {}
     for (const v of entry.values) customValues[v.name] = String(v.value)
-    setMetricForms((prev) => ({ ...prev, [campId]: { date: entry.date, reach: entry.reach ? String(entry.reach) : '', interactions: entry.interactions ? String(entry.interactions) : '', showInChart: entry.showInChart, customValues } }))
+    setMetricForms((prev) => ({ ...prev, [campId]: { date: entry.date, reach: entry.reach ? String(entry.reach) : '', interactions: entry.interactions ? String(entry.interactions) : '', customValues } }))
     setExpandedMetrics((p) => ({ ...p, [campId]: true }))
-  }
-
-  async function toggleEntryInChart(campId: string, entry: CampaignMetricEntry) {
-    const valores = entry.values.map((v) => ({ nome: v.name, valor: v.value }))
-    await api.campaigns.addMetric(campId, { data: entry.date, alcance: entry.reach, interacoes: entry.interactions, mostrarGrafico: !entry.showInChart, valores }).catch(console.error)
-    reload()
   }
 
   async function deleteMetricEntry(campId: string, metricId: string) {
@@ -1432,7 +1427,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                       style={{ background: i % 2 === 0 ? '#202024' : '#17171A', borderTop: i > 0 ? '1px solid rgba(255,255,255,0.06)' : undefined }}>
                       <span style={{ color: '#F0F0F5' }}>{g.name}</span>
                       <span style={{ color: '#8A8A9A' }}>Meta: {g.value}</span>
-                      <span style={{ color: g.showInChart ? '#7D1AD7' : '#555566' }}>{g.showInChart ? 'No gráfico' : 'Fora do gráfico'}</span>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => editFormGoal(i)}
                           className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]" title="Editar meta">
@@ -1460,7 +1454,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
           {filtered.map((camp) => {
             const st = statusStyle[camp.status]
             const expanded = expandedMetrics[camp.id]
-            const mf = metricForms[camp.id] ?? { date: '', reach: '', interactions: '', showInChart: true, customValues: {} }
+            const mf = metricForms[camp.id] ?? { date: '', reach: '', interactions: '', customValues: {} }
+            const goalLinesOn = goalLinesVisible[camp.id] ?? true
             const alcanceGoal = camp.goals.find((g) => g.name.trim().toLowerCase() === 'alcance')
             const interacoesGoal = camp.goals.find((g) => ['interações', 'interacoes'].includes(g.name.trim().toLowerCase()))
             const otherGoals = camp.goals.filter((g) => g !== alcanceGoal && g !== interacoesGoal)
@@ -1469,7 +1464,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
             const colorFor = (key: string) => GOAL_COLORS[Math.max(0, chartSeries.indexOf(key)) % GOAL_COLORS.length]
             const goalKey = (g: CampaignGoal) => (g === alcanceGoal ? 'reach' : g === interacoesGoal ? 'interactions' : g.name)
             // 0 significa "não preenchido" nesse registro — não plotamos o ponto para não sugerir que o valor real foi zero
-            const chartData = camp.dailyEntries.filter((e) => e.showInChart).map((e) => {
+            const chartData = camp.dailyEntries.map((e) => {
               const row: Record<string, string | number> = { date: e.date.slice(5) }
               if (e.reach !== 0) row.reach = e.reach
               if (e.interactions !== 0) row.interactions = e.interactions
@@ -1568,33 +1563,36 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                           {camp.dailyEntries.some((e) => e.date === mf.date) ? <><Edit2 size={12} /> Salvar alterações</> : <><Plus size={12} /> Registrar</>}
                         </button>
                       </div>
-                      <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
-                        <input type="checkbox" checked={mf.showInChart} onChange={(e) => setMetricForms((p) => ({ ...p, [camp.id]: { ...mf, showInChart: e.target.checked } }))}
-                          className="accent-[#7D1AD7]" />
-                        Mostrar este registro no gráfico de métricas diárias
-                      </label>
-
                       {/* Chart */}
                       {chartData.length > 0 && (
-                        <div style={{ height: 160, marginBottom: 12 }}>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
-                              <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
-                                formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
-                              {camp.goals.filter((g) => g.showInChart).map((g) => (
-                                <ReferenceLine key={g.id} y={g.value} stroke={colorFor(goalKey(g))} strokeDasharray="4 4" label={{ value: `Meta ${g.name}`, fill: colorFor(goalKey(g)), fontSize: 10 }} />
-                              ))}
-                              <Line type="monotone" dataKey="reach" name="Alcance" stroke={colorFor('reach')} strokeWidth={2} dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="interactions" name="Interações" stroke={colorFor('interactions')} strokeWidth={2} dot={{ r: 3 }} />
-                              {otherGoals.filter((g) => g.showInChart).map((g) => (
-                                <Line key={g.id} type="monotone" dataKey={g.name} name={g.name} stroke={colorFor(g.name)} strokeWidth={2} dot={{ r: 3 }} />
-                              ))}
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
+                        <>
+                          {camp.goals.length > 0 && (
+                            <button onClick={() => setGoalLinesVisible((p) => ({ ...p, [camp.id]: !goalLinesOn }))}
+                              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all mb-2 w-fit"
+                              style={{ color: goalLinesOn ? '#7D1AD7' : '#8A8A9A', background: goalLinesOn ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}>
+                              {goalLinesOn ? <Eye size={13} /> : <EyeOff size={13} />} Linhas de meta no gráfico
+                            </button>
+                          )}
+                          <div style={{ height: 160, marginBottom: 12 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={chartData} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#555566' }} axisLine={false} tickLine={false} />
+                                <Tooltip contentStyle={{ background: '#17171A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, fontSize: 11, color: '#F0F0F5' }}
+                                  formatter={(v) => Number(v ?? 0).toLocaleString('pt-BR')} />
+                                {goalLinesOn && camp.goals.map((g) => (
+                                  <ReferenceLine key={g.id} y={g.value} stroke={colorFor(goalKey(g))} strokeDasharray="4 4" label={{ value: `Meta ${g.name}`, fill: colorFor(goalKey(g)), fontSize: 10 }} />
+                                ))}
+                                <Line type="monotone" dataKey="reach" name="Alcance" stroke={colorFor('reach')} strokeWidth={2} dot={{ r: 3 }} />
+                                <Line type="monotone" dataKey="interactions" name="Interações" stroke={colorFor('interactions')} strokeWidth={2} dot={{ r: 3 }} />
+                                {otherGoals.map((g) => (
+                                  <Line key={g.id} type="monotone" dataKey={g.name} name={g.name} stroke={colorFor(g.name)} strokeWidth={2} dot={{ r: 3 }} />
+                                ))}
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </>
                       )}
 
                       {/* Entries table */}
@@ -1614,12 +1612,6 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                                   className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]"
                                   title="Editar registro">
                                   <Edit2 size={15} />
-                                </button>
-                                <button onClick={() => toggleEntryInChart(camp.id, entry)}
-                                  className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
-                                  style={{ color: entry.showInChart ? '#7D1AD7' : '#8A8A9A', background: entry.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
-                                  title={entry.showInChart ? 'Ocultar do gráfico' : 'Mostrar no gráfico'}>
-                                  {entry.showInChart ? <Eye size={15} /> : <EyeOff size={15} />}
                                 </button>
                                 <button onClick={() => entry.id && deleteMetricEntry(camp.id, entry.id)}
                                   className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]"

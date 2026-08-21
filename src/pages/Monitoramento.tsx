@@ -1181,6 +1181,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
   const emptyNewGoal = { name: '', value: '', showInChart: true }
   const [form, setForm] = useState(emptyCampaignForm)
   const [newGoal, setNewGoal] = useState(emptyNewGoal)
+  const [editingGoalIndex, setEditingGoalIndex] = useState<number | null>(null)
+  const [editingLiveGoalId, setEditingLiveGoalId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingCampaign = editingId ? campaigns.find((c) => c.id === editingId) ?? null : null
 
@@ -1197,12 +1199,23 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
   function addFormGoal() {
     if (!newGoal.name.trim() || !newGoal.value) return
-    setForm((f) => ({ ...f, goals: [...f.goals, newGoal] }))
+    if (editingGoalIndex !== null) {
+      setForm((f) => ({ ...f, goals: f.goals.map((g, i) => i === editingGoalIndex ? newGoal : g) }))
+      setEditingGoalIndex(null)
+    } else {
+      setForm((f) => ({ ...f, goals: [...f.goals, newGoal] }))
+    }
     setNewGoal(emptyNewGoal)
+  }
+
+  function editFormGoal(index: number) {
+    setNewGoal(form.goals[index])
+    setEditingGoalIndex(index)
   }
 
   function removeFormGoal(index: number) {
     setForm((f) => ({ ...f, goals: f.goals.filter((_, i) => i !== index) }))
+    if (editingGoalIndex === index) { setEditingGoalIndex(null); setNewGoal(emptyNewGoal) }
   }
 
   function closeForm() {
@@ -1210,12 +1223,16 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     setEditingId(null)
     setForm(emptyCampaignForm)
     setNewGoal(emptyNewGoal)
+    setEditingGoalIndex(null)
+    setEditingLiveGoalId(null)
   }
 
   function openCreate() {
     setEditingId(null)
     setForm(emptyCampaignForm)
     setNewGoal(emptyNewGoal)
+    setEditingGoalIndex(null)
+    setEditingLiveGoalId(null)
     setShowForm(true)
   }
 
@@ -1223,6 +1240,8 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
     setEditingId(camp.id)
     setForm({ name: camp.name, objective: camp.objective, audience: camp.audience, status: camp.status, startDate: camp.startDate, endDate: camp.endDate, channels: camp.channels, goals: [] })
     setNewGoal(emptyNewGoal)
+    setEditingGoalIndex(null)
+    setEditingLiveGoalId(null)
     setShowForm(true)
   }
 
@@ -1260,9 +1279,19 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
   async function addGoalLive(campId: string) {
     if (!newGoal.name.trim() || !newGoal.value) return
-    await api.campaigns.addGoal(campId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+    if (editingLiveGoalId) {
+      await api.campaigns.updateGoal(campId, editingLiveGoalId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+      setEditingLiveGoalId(null)
+    } else {
+      await api.campaigns.addGoal(campId, { nome: newGoal.name.trim(), valor: parseFloat(newGoal.value) || 0, mostrarGrafico: newGoal.showInChart }).catch(console.error)
+    }
     setNewGoal(emptyNewGoal)
     reload()
+  }
+
+  function editGoalLive(goal: CampaignGoal) {
+    setNewGoal({ name: goal.name, value: String(goal.value), showInChart: goal.showInChart })
+    setEditingLiveGoalId(goal.id)
   }
 
   async function toggleGoalInChart(campId: string, goal: CampaignGoal) {
@@ -1272,6 +1301,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
 
   async function deleteGoalLive(campId: string, goalId: string) {
     await api.campaigns.removeGoal(campId, goalId).catch(console.error)
+    if (editingLiveGoalId === goalId) { setEditingLiveGoalId(null); setNewGoal(emptyNewGoal) }
     reload()
   }
 
@@ -1373,7 +1403,7 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                 </div>
                 <button onClick={() => editingCampaign ? addGoalLive(editingCampaign.id) : addFormGoal()} className="flex items-center gap-1 text-xs px-3 py-2 rounded-xl font-medium text-white hover:opacity-90 btn-glow"
                   style={{ background: '#7D1AD7' }}>
-                  <Plus size={12} /> Adicionar meta
+                  {(editingCampaign ? editingLiveGoalId : editingGoalIndex !== null) ? <><Edit2 size={12} /> Salvar meta</> : <><Plus size={12} /> Adicionar meta</>}
                 </button>
               </div>
               <label className="flex items-center gap-2 text-xs text-[#8A8A9A] mb-3 cursor-pointer w-fit">
@@ -1390,6 +1420,10 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                         <span style={{ color: '#F0F0F5' }}>{g.name}</span>
                         <span style={{ color: '#8A8A9A' }}>Meta: {g.value.toLocaleString('pt-BR')}</span>
                         <div className="flex items-center gap-1.5">
+                          <button onClick={() => editGoalLive(g)}
+                            className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]" title="Editar meta">
+                            <Edit2 size={14} />
+                          </button>
                           <button onClick={() => toggleGoalInChart(editingCampaign.id, g)}
                             className="p-1.5 rounded-lg transition-all hover:bg-[rgba(255,255,255,0.08)]"
                             style={{ color: g.showInChart ? '#7D1AD7' : '#8A8A9A', background: g.showInChart ? 'rgba(125,26,215,0.12)' : 'rgba(255,255,255,0.05)' }}
@@ -1415,9 +1449,15 @@ function CampaignsView({ channel, setChannel }: { channel: Channel; setChannel: 
                       <span style={{ color: '#F0F0F5' }}>{g.name}</span>
                       <span style={{ color: '#8A8A9A' }}>Meta: {g.value}</span>
                       <span style={{ color: g.showInChart ? '#7D1AD7' : '#555566' }}>{g.showInChart ? 'No gráfico' : 'Fora do gráfico'}</span>
-                      <button onClick={() => removeFormGoal(i)} className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]" title="Remover meta">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => editFormGoal(i)}
+                          className="p-1.5 rounded-lg text-[#555566] transition-all hover:text-[#7D1AD7] hover:bg-[rgba(125,26,215,0.12)]" title="Editar meta">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => removeFormGoal(i)} className="p-1.5 rounded-lg text-[#FF5252] transition-all hover:bg-[rgba(255,82,82,0.15)]" title="Remover meta">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

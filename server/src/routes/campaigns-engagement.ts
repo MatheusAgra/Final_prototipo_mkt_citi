@@ -11,10 +11,17 @@ const campaignBodyBase = z.object({ nome: z.string().trim().min(1), objetivo: z.
 // metas é aceito só na criação: permite já nascer com as metas personalizadas escolhidas no próprio formulário de "Nova Campanha"
 const campaignBody = campaignBodyBase.extend({ metas: z.array(campaignGoalBody).optional().default([]) }).refine((value) => value.dataFim >= value.dataInicio, { message: 'dataFim deve ser posterior à dataInicio' })
 const campaignInclude = { canais: true, metricasDiarias: { orderBy: { data: 'asc' as const }, include: { valores: true } }, metas: { orderBy: { ordem: 'asc' as const } } } as const
+// dataInicio/dataFim nascem de um input tipo "date" (ex.: "2026-08-21") coagido para meia-noite UTC —
+// o dia de calendário pretendido é a própria data UTC armazenada, não deve ser reconvertida para outro
+// fuso (isso a deslocaria um dia para trás). Já "agora" é um instante real e precisa virar o dia de
+// calendário certo no fuso de Brasília, senão à noite no horário local o relógio UTC já virou o dia
+// seguinte e uma campanha com início "amanhã" aparecia como já ativa.
+const utcDateStr = (value: Date) => new Date(value).toISOString().slice(0, 10)
+const brTodayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 const deriveStatus = (dataInicio: Date, dataFim: Date) => {
-  const now = Date.now()
-  if (now < new Date(dataInicio).getTime()) return 'PLANEJADA'
-  if (now > new Date(dataFim).getTime()) return 'ENCERRADA'
+  const today = brTodayStr()
+  if (today < utcDateStr(dataInicio)) return 'PLANEJADA'
+  if (today > utcDateStr(dataFim)) return 'ENCERRADA'
   return 'ATIVA'
 }
 const serializeCampaign = (campaign: any) => {

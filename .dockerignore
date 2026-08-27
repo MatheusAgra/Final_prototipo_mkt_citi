@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+dist/
+dist-api/
+build/
+.cache/
+.env
+.env.*
+!.env.example
+.git/
+.vite/
+uploads/
+.marketops-db/
+*.log
+tmp/

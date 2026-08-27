@@ -3,6 +3,7 @@ import path from "node:path"
 import { Router, type Request } from "express"
 import { z } from "zod"
 import { config } from "./config.js"
+import { isStorageConfigured, signedStorageUrl } from "./storage.js"
 
 const categories = ["posts", "materials"] as const
 type FileCategory = typeof categories[number]
@@ -92,7 +93,7 @@ export function signedFileUrl(
 }
 
 export const filesRouter = Router()
-filesRouter.get("/:category/:filename", (req, res) => {
+filesRouter.get("/:category/:filename", async (req, res) => {
   const params = z
     .object({
       category: z.enum(categories),
@@ -127,6 +128,24 @@ filesRouter.get("/:category/:filename", (req, res) => {
     return res
       .status(403)
       .json({ error: { code: "DOWNLOAD_SIGNATURE_REQUIRED" } })
+
+  if (isStorageConfigured()) {
+    try {
+      const expiresIn = Math.max(
+        1,
+        expires - Math.floor(Date.now() / 1000),
+      )
+      const url = await signedStorageUrl(category, filename, {
+        expiresIn,
+        download,
+      })
+      return res.redirect(302, url)
+    } catch {
+      return res
+        .status(404)
+        .json({ error: { code: "FILE_NOT_FOUND" } })
+    }
+  }
 
   const root = path.resolve(process.cwd(), config.UPLOAD_DIR, category)
   res.setHeader("Cache-Control", "private, max-age=60")

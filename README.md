@@ -138,6 +138,50 @@ pnpm typecheck     # verifica os tipos
 pnpm test          # executa os testes
 ```
 
+## Deploy de produção
+
+A arquitetura de produção usa Supabase para PostgreSQL e Storage privado, Railway
+para a API Express e Vercel para o frontend Vite.
+
+### Supabase
+
+1. Crie um projeto vazio e um usuário de banco dedicado para o Prisma.
+2. Use a conexão Session Pooler na porta `5432` em `DATABASE_URL`.
+3. Execute as migrações com `pnpm exec prisma migrate deploy`.
+4. Execute `pnpm db:seed` uma única vez para criar o gerente e os dados iniciais.
+5. Crie os buckets privados `posts` e `materials`, ambos com limite de 20 MB.
+
+O backend usa `SUPABASE_URL` e `SUPABASE_SECRET_KEY` para enviar os arquivos e
+gerar URLs assinadas. A chave secreta nunca deve ser colocada no frontend.
+
+### Railway
+
+O serviço da API deve usar `Dockerfile.api`. O arquivo `railway.json` já define:
+
+- pre-deploy: `pnpm exec prisma migrate deploy`;
+- start: `node dist-api/index.js`;
+- healthcheck: `/health`.
+
+Configure no Railway as variáveis do `.env.example`, incluindo `DATABASE_URL`,
+`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, os segredos JWT/OAuth, as credenciais do
+Gmail e `UPLOAD_DIR=/tmp/uploads`. Gere o domínio público antes de preencher
+`GOOGLE_OAUTH_REDIRECT_URI` com `/api/v1/google/callback`.
+
+### Vercel
+
+Importe o mesmo repositório como projeto Vite, usando `pnpm build` e saída `dist`.
+Configure somente a variável pública:
+
+```env
+VITE_API_URL=https://<dominio-do-railway>/api/v1
+```
+
+No Railway, defina `FRONTEND_URL` e `CORS_ORIGIN` para a URL de produção do
+frontend. Não coloque no Vercel chaves do Supabase, Gmail, JWT ou OAuth.
+
+Antes de publicar, rode `pnpm typecheck`, `pnpm test`, `pnpm build` e
+`pnpm build:api`.
+
 Para o fluxo recomendado de teste integrado, use o Docker Compose, pois ele inicia PostgreSQL, migrações, API e frontend juntos.
 
 ## Solução de problemas

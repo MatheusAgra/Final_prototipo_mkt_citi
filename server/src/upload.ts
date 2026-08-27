@@ -7,6 +7,7 @@ import type { RequestHandler } from "express"
 import { config } from "./config.js"
 import { ApiError } from "./http.js"
 import { internalFileReference } from "./files.js"
+import { isStorageConfigured, uploadStoredFile } from "./storage.js"
 
 type UploadCategory = "posts" | "materials"
 type AllowedType = { ext: string; mime: string }
@@ -107,6 +108,7 @@ export function allowedUploadType(
 function finalizeUpload(category: UploadCategory): RequestHandler {
   return async (req, _res, next) => {
     if (!req.file) return next()
+    let finalPath: string | undefined
     try {
       const type = await detectedType(req.file, category)
       if (!type)
@@ -124,14 +126,20 @@ function finalizeUpload(category: UploadCategory): RequestHandler {
       )
       await fs.promises.mkdir(destination, { recursive: true })
       const filename = `${crypto.randomUUID()}.${type.ext}`
-      const finalPath = path.join(destination, filename)
+      finalPath = path.join(destination, filename)
       await fs.promises.rename(req.file.path, finalPath)
+      if (isStorageConfigured()) {
+        await uploadStoredFile(category, filename, finalPath, type.mime)
+        await fs.promises.unlink(finalPath)
+      }
       req.file.filename = filename
       req.file.path = finalPath
       req.file.mimetype = type.mime
       next()
     } catch (error) {
       await fs.promises.unlink(req.file.path).catch(() => undefined)
+      if (finalPath && finalPath !== req.file.path)
+        await fs.promises.unlink(finalPath).catch(() => undefined)
       next(error)
     }
   }

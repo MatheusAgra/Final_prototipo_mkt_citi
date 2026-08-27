@@ -41,6 +41,11 @@ const raw = z
     GMAIL_CLIENT_SECRET: optionalString,
     GMAIL_REFRESH_TOKEN: optionalString,
     GMAIL_SENDER: optionalEmail,
+    SUPABASE_URL: z.preprocess(
+      emptyToUndefined,
+      z.string().url().optional(),
+    ),
+    SUPABASE_SECRET_KEY: optionalString,
     EMAIL_FROM_NAME: z.string().default("CITi HubSpot"),
     GOOGLE_OAUTH_REDIRECT_URI: z
       .string()
@@ -80,6 +85,10 @@ if (raw.NODE_ENV === "production") {
   }))
     if (!value || value.length < 32)
       productionErrors.push(`${name} deve ter ao menos 32 caracteres`)
+  if (!raw.SUPABASE_URL || !raw.SUPABASE_SECRET_KEY)
+    productionErrors.push(
+      "SUPABASE_URL e SUPABASE_SECRET_KEY são obrigatórios",
+    )
   if (
     raw.GOOGLE_TOKEN_ENCRYPTION_KEY &&
     Buffer.from(raw.GOOGLE_TOKEN_ENCRYPTION_KEY, "base64").length !== 32

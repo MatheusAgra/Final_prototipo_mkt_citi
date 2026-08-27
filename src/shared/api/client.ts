@@ -1,5 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1"
-let token = sessionStorage.getItem("marketops.token")
+const storage = typeof window === "undefined" ? null : window.sessionStorage
+let token = storage?.getItem("marketops.token") ?? null
 
 export class ApiClientError extends Error {
   constructor(
@@ -60,8 +61,8 @@ async function upload<T>(path: string, file: File): Promise<T> {
 export const api = {
   setToken(value: string | null) {
     token = value
-    if (value) sessionStorage.setItem("marketops.token", value)
-    else sessionStorage.removeItem("marketops.token")
+    if (value) storage?.setItem("marketops.token", value)
+    else storage?.removeItem("marketops.token")
   },
   get hasToken() {
     return Boolean(token)

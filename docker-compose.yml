@@ -1,16 +1,64 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.10-alpine
     environment:
-      POSTGRES_USER: marketops
-      POSTGRES_PASSWORD: marketops
-      POSTGRES_DB: marketops
-    ports: ["5432:5432"]
-    volumes: ["marketops_pgdata:/var/lib/postgresql/data"]
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER obrigatório}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatório}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB obrigatório}
+    volumes:
+      - marketops_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U marketops"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    env_file: [.env]
+    environment:
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?DATABASE_URL_DOCKER obrigatória}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL_DOCKER:?DATABASE_URL_DOCKER obrigatória}
+      PORT: 3001
+      ALLOW_RESET_CODE_LOG: "false"
+      ALLOW_LEGACY_GOOGLE_TOKENS: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose: ["3001"]
+    volumes:
+      - marketops_uploads:/app/uploads
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        VITE_API_URL: /api/v1
+    depends_on: [api]
+    expose: ["8080"]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
 volumes:
   marketops_pgdata:
+  marketops_uploads:

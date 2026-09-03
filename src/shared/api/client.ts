@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/v1"
+const API_URL =
+  import.meta.env.VITE_API_URL ??
+  "https://finalprototipomktciti-production.up.railway.app/api/v1"
 const storage = typeof window === "undefined" ? null : window.sessionStorage
 let token = storage?.getItem("marketops.token") ?? null
 

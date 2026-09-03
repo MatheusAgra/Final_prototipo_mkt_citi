@@ -1,13 +1,10 @@
-import citiLogoGreen from "@/assets/citi-logo-green.png"
+import citiLogoWhite from "@/assets/citi-logo-white.png"
 
 export default function BrandMark() {
   return (
-    <div
-      className="flex flex-col items-start flex-shrink-0"
-      title="CITi HubSpot - Gerenciamento de Marketing"
-    >
+    <div className="flex flex-col items-start flex-shrink-0">
       <img
-        src={citiLogoGreen}
+        src={citiLogoWhite}
         alt="CITi"
         className="h-[2.875rem] sm:h-[3.25rem] w-auto"
       />

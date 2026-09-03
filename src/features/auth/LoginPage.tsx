@@ -9,7 +9,7 @@ import {
   ArrowRight,
 } from "lucide-react"
 import type { AppUser } from "@/shared/model/domain"
-import citiLogo from "@/assets/citi-logo-green.png"
+import citiLogo from "@/assets/citi-logo-white.png"
 import LiquidBackground from "@/shared/ui/LiquidBackground"
 
 // ─── Change Password ────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export function ChangePasswordScreen({ user, onSave, onBack }: ChangePwProps) {
           <div>
             <img src={citiLogo} alt="CITi" className="h-8 w-auto mx-auto" />
             <div className="text-[10px] uppercase tracking-[.2em] text-[#6F6F7B] text-center mt-1.5">
-              Gerenciamento de Marketing
+              Marketing Intelligence
             </div>
           </div>
         </div>
@@ -482,7 +482,7 @@ export default function Login({
       <section className="original-login__hero">
         <div className="original-login__eyebrow">
           <span />
-          CITi HubSpot
+          HubSpot
         </div>
         <h1>
           Estratégia em
@@ -636,7 +636,7 @@ export default function Login({
       </section>
 
       <footer>
-        CITi HubSpot © 2026 <span>•</span> Gerenciamento de Marketing
+        CITi © 2026 <span>•</span> Tecnologia que transforma
       </footer>
     </main>
   )

@@ -1,6 +1,11 @@
-const API_URL =
-  import.meta.env.VITE_API_URL ??
+const PRODUCTION_API_URL =
   "https://finalprototipomktciti-production.up.railway.app/api/v1"
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim()
+const localApiUrl = /^https?:\/\/(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)(?::\d+)?(?:\/|$)/i
+const API_URL =
+  import.meta.env.PROD && configuredApiUrl && localApiUrl.test(configuredApiUrl)
+    ? PRODUCTION_API_URL
+    : configuredApiUrl || PRODUCTION_API_URL
 const storage = typeof window === "undefined" ? null : window.sessionStorage
 let token = storage?.getItem("marketops.token") ?? null
 

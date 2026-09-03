@@ -1,4 +1,4 @@
-# CITi HubSpot
+# CITi HubSpot - Gerenciamento de Marketing
 
 Aplicação React + Vite com API Node/Express, Prisma e PostgreSQL.
 
@@ -169,11 +169,16 @@ Gmail e `UPLOAD_DIR=/tmp/uploads`. Gere o domínio público antes de preencher
 
 ### Vercel
 
-Importe o mesmo repositório como projeto Vite, usando `pnpm build` e saída `dist`.
+O projeto Vercel usa o nome `citihubspot` e está disponível em
+`https://citihubspot.vercel.app`. A Vercel usa o sufixo `.vercel.app` para
+domínios automáticos; `citihubspot.vercel.dev` não está disponível.
+
+Para novos deploys, importe o mesmo repositório como projeto Vite, usando
+`pnpm build` e saída `dist`.
 Configure somente a variável pública:
 
 ```env
-VITE_API_URL=https://<dominio-do-railway>/api/v1
+VITE_API_URL=https://finalprototipomktciti-production.up.railway.app/api/v1
 ```
 
 No Railway, defina `FRONTEND_URL` e `CORS_ORIGIN` para a URL de produção do

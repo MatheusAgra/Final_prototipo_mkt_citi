@@ -1,5 +1,7 @@
 {
-  "description": "Streamline marketing team management with a robust platform for campaign monitoring, content libraries, and performance metrics tailored for managers and analysts.",
+  "title": "CITi HubSpot - Gerenciamento de Marketing",
+  "description": "CITi HubSpot - Gerenciamento de Marketing: dados, conteúdo e performance em um só lugar.",
+  "language": "pt-BR",
   "robots": {
     "index": false
   },

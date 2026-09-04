@@ -390,24 +390,68 @@ const audienceDefaults: Record<typeof AUDIENCE_TABS[number], {
   label: string
   value: number
 }[]> = {
-  CARGO: [],
-  SENIORIDADE: [],
-  SETOR: [],
-  LOCALIZACAO: [],
+  CARGO: [
+    "Marketing & Comunicação",
+    "Engenharia & Tecnologia",
+    "Vendas & Negócios",
+    "Liderança (C-Level, VP)",
+    "RH & Gestão de Pessoas",
+    "Financeiro",
+    "Outros",
+  ].map((label) => ({ label, value: 0 })),
+  SENIORIDADE: [
+    "Pleno",
+    "Sênior",
+    "Gerência",
+    "Diretoria",
+    "C-Level",
+    "Júnior",
+  ].map((label) => ({ label, value: 0 })),
+  SETOR: [
+    "Tecnologia",
+    "Serviços profissionais",
+    "Educação",
+    "Varejo",
+    "Indústria",
+    "Outros",
+  ].map((label) => ({ label, value: 0 })),
+  LOCALIZACAO: [
+    "São Paulo",
+    "Recife",
+    "Rio de Janeiro",
+    "Belo Horizonte",
+    "Curitiba",
+    "Outros",
+  ].map((label) => ({ label, value: 0 })),
 }
 metricsRouter.get(
   "/linkedin-audience",
   asyncRoute(async (_req, res) => {
-    const rows = await prisma.audienceSegment.findMany({
+    let rows = await prisma.audienceSegment.findMany({
       orderBy: { ordem: "asc" },
     })
+    const existing = new Set(rows.map((row) => `${row.tab}:${row.label}`))
+    const missing = AUDIENCE_TABS.flatMap((tab) =>
+      audienceDefaults[tab].flatMap((segment, ordem) =>
+        existing.has(`${tab}:${segment.label}`)
+          ? []
+          : [{ tab, label: segment.label, value: 0, ordem }],
+      ),
+    )
+    if (missing.length > 0) {
+      await prisma.audienceSegment.createMany({
+        data: missing,
+        skipDuplicates: true,
+      })
+      rows = await prisma.audienceSegment.findMany({
+        orderBy: { ordem: "asc" },
+      })
+    }
     const grouped: Record<string, { label: string; value: number }[]> = {}
     for (const tab of AUDIENCE_TABS)
-      grouped[tab] = rows.filter((r) => r.tab === tab).length
-        ? rows
-            .filter((r) => r.tab === tab)
-            .map((r) => ({ label: r.label, value: r.value }))
-        : audienceDefaults[tab]
+      grouped[tab] = rows
+        .filter((r) => r.tab === tab)
+        .map((r) => ({ label: r.label, value: r.value }))
     res.json(grouped)
   }),
 )
@@ -427,20 +471,31 @@ metricsRouter.put(
           ),
       })
       .parse(req.body)
+    const submittedValues = new Map(
+      body.segmentos.map((segment) => [segment.label, segment.value]),
+    )
+    const defaultLabels = new Set(
+      audienceDefaults[body.tab].map((segment) => segment.label),
+    )
+    const normalizedSegments = [
+      ...audienceDefaults[body.tab].map((segment) => ({
+        ...segment,
+        value: submittedValues.get(segment.label) ?? 0,
+      })),
+      ...body.segmentos.filter((segment) => !defaultLabels.has(segment.label)),
+    ]
     await prisma.$transaction(async (tx) => {
       await tx.audienceSegment.deleteMany({ where: { tab: body.tab } })
-      if (body.segmentos.length > 0) {
-        await tx.audienceSegment.createMany({
-          data: body.segmentos.map((s, ordem) => ({
-            tab: body.tab,
-            label: s.label,
-            value: s.value,
-            ordem,
-          })),
-        })
-      }
+      await tx.audienceSegment.createMany({
+        data: normalizedSegments.map((segment, ordem) => ({
+          tab: body.tab,
+          label: segment.label,
+          value: segment.value,
+          ordem,
+        })),
+      })
     })
-    res.json({ tab: body.tab, segmentos: body.segmentos })
+    res.json({ tab: body.tab, segmentos: normalizedSegments })
   }),
 )
 

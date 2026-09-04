@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   BarChart2,
   TrendingUp,
@@ -305,17 +305,16 @@ function Dashboard({
               Alcance por post (julho)
             </h3>
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart
-                data={posts
-                  .slice(0, 6)
-                  .map((p) => ({
-                    name: p.title.slice(0, 20) + "…",
-                    reach: p.insights.reach,
-                    channel: p.channel,
-                  }))}
-                margin={{ top: 0, right: 0, left: -20, bottom: 0 }}
-                barSize={20}
-              >
+              <BarChart data={posts.slice(0, 6).map((p) => ({
+                  name: p.title.slice(0, 20) + "…",
+                  reach: p.insights.reach,
+                  channel: p.channel,
+                }))} margin={{
+                  top: 0,
+                  right: 0,
+                  left: -20,
+                  bottom: 0,
+                }} barSize={20}>
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="rgba(255,255,255,0.06)"
@@ -391,6 +390,16 @@ function GlobalMetricsModal({
     label: string
     suffix?: string
   }[] = [
+    {
+      key: "reachOverride",
+      label: channel === "instagram" ? "Alcance" : "Alcance único",
+    },
+    { key: "impressionsOverride", label: "Impressões" },
+    {
+      key: "engagementRateOverride",
+      label: "Taxa de engajamento",
+      suffix: "%",
+    },
     { key: "followersTotal", label: "Seguidores totais" },
     { key: "followersGrowth", label: "Novos seguidores no período" },
     {
@@ -522,6 +531,39 @@ const DASHBOARD_FORMAT_ENUM: Record<string, string> = Object.fromEntries(
 const ageInDays = (iso: string) =>
   Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
 
+const emptyInstagramFormats = () => [
+  { format: "Reels", reach: 0, engagement: 0, saves: 0, shares: 0 },
+  { format: "Carrossel", reach: 0, engagement: 0, saves: 0, shares: 0 },
+  { format: "Post Estático", reach: 0, engagement: 0, saves: 0, shares: 0 },
+  { format: "Stories", reach: 0, engagement: 0, saves: 0, shares: 0 },
+]
+
+const emptyLinkedinFormats = () =>
+  [
+    "PDF / Documento",
+    "Texto + Imagem",
+    "Vídeo",
+    "Artigo / Newsletter",
+    "Enquete",
+  ].map((format) => ({
+    format,
+    impressions: 0,
+    ctr: 0,
+    reactions: 0,
+    reposts: 0,
+    comments: 0,
+  }))
+
+const emptyActivityHeatmap = () =>
+  Array.from({ length: 7 }, () => Array(9).fill(0) as number[])
+
+const emptyAudienceData = () => ({
+  "Cargo / Função": [],
+  Senioridade: [],
+  Setor: [],
+  Localização: [],
+})
+
 export function DashboardFigma({
   posts,
   metrics,
@@ -543,121 +585,27 @@ export function DashboardFigma({
       null,
     )
   const [editMode, setEditMode] = useState(false)
-  const [instagramFormats, setInstagramFormats] = useState([
-    { format: "Reels", reach: 12400, engagement: 6.8, saves: 892, shares: 241 },
-    {
-      format: "Carrossel",
-      reach: 4800,
-      engagement: 5.2,
-      saves: 634,
-      shares: 118,
-    },
-    {
-      format: "Post Estático",
-      reach: 3100,
-      engagement: 3.1,
-      saves: 220,
-      shares: 64,
-    },
-    { format: "Stories", reach: 2200, engagement: 4.4, saves: 0, shares: 0 },
-  ])
-  const [storyViews, setStoryViews] = useState([
-    3410, 2890, 2410, 1980, 1640, 1320,
-  ])
-  const [activityHeatmap, setActivityHeatmap] = useState([
-    [10, 18, 40, 62, 48, 55, 80, 72, 30],
-    [12, 22, 55, 70, 60, 58, 88, 90, 42],
-    [8, 16, 48, 64, 52, 60, 82, 78, 35],
-    [14, 20, 50, 68, 55, 62, 86, 85, 40],
-    [10, 18, 42, 60, 50, 52, 72, 68, 28],
-    [6, 10, 22, 40, 38, 50, 65, 60, 45],
-    [4, 8, 18, 32, 30, 44, 58, 54, 38],
-  ])
-  const [organicShare, setOrganicShare] = useState(68)
-  const [linkedinFormats, setLinkedinFormats] = useState([
-    {
-      format: "PDF / Documento",
-      impressions: 14200,
-      ctr: 4.8,
-      reactions: 7.2,
-      reposts: 187,
-      comments: 86,
-    },
-    {
-      format: "Texto + Imagem",
-      impressions: 9800,
-      ctr: 3.6,
-      reactions: 5.8,
-      reposts: 134,
-      comments: 72,
-    },
-    {
-      format: "Vídeo",
-      impressions: 7300,
-      ctr: 2.9,
-      reactions: 6.1,
-      reposts: 98,
-      comments: 54,
-    },
-    {
-      format: "Artigo / Newsletter",
-      impressions: 5600,
-      ctr: 6.4,
-      reactions: 2.8,
-      reposts: 150,
-      comments: 130,
-    },
-    {
-      format: "Enquete",
-      impressions: 4800,
-      ctr: 8.2,
-      reactions: 6.1,
-      reposts: 32,
-      comments: 240,
-    },
-  ])
+  const [savingDashboard, setSavingDashboard] = useState(false)
+  const [saveError, setSaveError] = useState("")
+  const [instagramFormats, setInstagramFormats] = useState(
+    emptyInstagramFormats,
+  )
+  const [storyViews, setStoryViews] = useState([0, 0, 0, 0, 0, 0])
+  const [activityHeatmap, setActivityHeatmap] = useState(emptyActivityHeatmap)
+  const [instagramDistributionExists, setInstagramDistributionExists] =
+    useState(false)
+  const [organicShare, setOrganicShare] = useState(0)
+  const [linkedinDistributionExists, setLinkedinDistributionExists] =
+    useState(false)
+  const [linkedinFormats, setLinkedinFormats] = useState(emptyLinkedinFormats)
   const [audienceTab, setAudienceTab] =
     useState<"Cargo / Função" | "Senioridade" | "Setor" | "Localização">(
       "Cargo / Função",
     )
-  const [audienceData, setAudienceData] = useState<Record<string, {
-    label: string
-    value: number
-  }[]>>({
-    "Cargo / Função": [
-      { label: "Marketing & Comunicação", value: 28 },
-      { label: "Engenharia & Tecnologia", value: 22 },
-      { label: "Vendas & Negócios", value: 18 },
-      { label: "Liderança (C-Level, VP)", value: 12 },
-      { label: "RH & Gestão de Pessoas", value: 8 },
-      { label: "Financeiro", value: 7 },
-      { label: "Outros", value: 5 },
-    ],
-    Senioridade: [
-      { label: "Pleno", value: 31 },
-      { label: "Sênior", value: 27 },
-      { label: "Gerência", value: 19 },
-      { label: "Diretoria", value: 12 },
-      { label: "C-Level", value: 7 },
-      { label: "Júnior", value: 4 },
-    ],
-    Setor: [
-      { label: "Tecnologia", value: 32 },
-      { label: "Serviços profissionais", value: 23 },
-      { label: "Educação", value: 16 },
-      { label: "Varejo", value: 12 },
-      { label: "Indústria", value: 10 },
-      { label: "Outros", value: 7 },
-    ],
-    Localização: [
-      { label: "São Paulo", value: 38 },
-      { label: "Recife", value: 19 },
-      { label: "Rio de Janeiro", value: 16 },
-      { label: "Belo Horizonte", value: 11 },
-      { label: "Curitiba", value: 9 },
-      { label: "Outros", value: 7 },
-    ],
-  })
+  const [audienceData, setAudienceData] =
+    useState<Record<string, { label: string; value: number }[]>>(
+      emptyAudienceData,
+    )
   const activeChannel: "instagram" | "linkedin" =
     channel === "linkedin" ? "linkedin" : "instagram"
   const filteredPosts = useMemo(
@@ -694,63 +642,75 @@ export function DashboardFigma({
           [activeChannel]: {
             ...current[activeChannel],
             ...globalRow,
-            ...(dashboard.alcanceSeguidores && activeChannel === "instagram"
-              ? { followerReachShare: dashboard.alcanceSeguidores.seguidores }
+            ...(activeChannel === "instagram"
+              ? {
+                  followerReachShare:
+                    dashboard.alcanceSeguidores?.seguidores ?? 0,
+                }
               : {}),
           },
         }))
-        if (dashboard.alcanceSeguidores && activeChannel === "linkedin")
-          setOrganicShare(dashboard.alcanceSeguidores.seguidores)
         if (activeChannel === "instagram") {
-          if (dashboard.formatos?.length)
-            setInstagramFormats(
-              dashboard.formatos.map((row: any) => ({
-                format: DASHBOARD_FORMAT_LABELS[row.formato] ?? row.formato,
-                reach: row.alcanceMedio,
-                engagement: row.taxaEngajamento,
-                saves: row.saves ?? 0,
-                shares: row.compartilhamentos ?? 0,
-              })),
-            )
-          if (dashboard.funilStories?.length)
-            setStoryViews(
-              dashboard.funilStories.map((row: any) => row.espectadores),
-            )
-          if (dashboard.heatmap?.length) {
-            const cells = new Map(
-              dashboard.heatmap.map((cell: any) => [
-                `${cell.diaSemana}:${cell.faixaHora}`,
-                cell.intensidade,
-              ]),
-            )
-            setActivityHeatmap(
-              Array.from({ length: 7 }, (_, day) =>
-                hours.map((hour) => Number(cells.get(`${day}:${hour}`) ?? 0)),
-              ),
-            )
-          }
+          setInstagramDistributionExists(Boolean(dashboard.alcanceSeguidores))
+          setInstagramFormats(
+            dashboard.formatos?.length
+              ? dashboard.formatos.map((row: any) => ({
+                  format: DASHBOARD_FORMAT_LABELS[row.formato] ?? row.formato,
+                  reach: row.alcanceMedio ?? 0,
+                  engagement: row.taxaEngajamento ?? 0,
+                  saves: row.saves ?? 0,
+                  shares: row.compartilhamentos ?? 0,
+                }))
+              : emptyInstagramFormats(),
+          )
+          const storiesByOrder = new Map<number, number>(
+            (dashboard.funilStories ?? []).map((row: any) => [
+              Number(row.ordem),
+              Number(row.espectadores ?? 0),
+            ]),
+          )
+          setStoryViews(
+            Array.from({ length: 6 }, (_, index) =>
+              Number(storiesByOrder.get(index + 1) ?? 0),
+            ),
+          )
+          const cells = new Map(
+            (dashboard.heatmap ?? []).map((cell: any) => [
+              `${cell.diaSemana}:${cell.faixaHora}`,
+              cell.intensidade,
+            ]),
+          )
+          setActivityHeatmap(
+            Array.from({ length: 7 }, (_, day) =>
+              hours.map((hour) => Number(cells.get(`${day}:${hour}`) ?? 0)),
+            ),
+          )
         } else {
-          if (dashboard.formatos?.length)
-            setLinkedinFormats(
-              dashboard.formatos.map((row: any) => ({
-                format: DASHBOARD_FORMAT_LABELS[row.formato] ?? row.formato,
-                impressions: row.impressoes ?? row.alcanceMedio ?? 0,
-                ctr: row.ctr ?? 0,
-                reactions: row.taxaReacao ?? row.taxaEngajamento ?? 0,
-                reposts: row.reposts ?? 0,
-                comments: row.comentarios ?? 0,
-              })),
-            )
+          setLinkedinDistributionExists(Boolean(dashboard.alcanceSeguidores))
+          setOrganicShare(dashboard.alcanceSeguidores?.seguidores ?? 0)
+          setLinkedinFormats(
+            dashboard.formatos?.length
+              ? dashboard.formatos.map((row: any) => ({
+                  format: DASHBOARD_FORMAT_LABELS[row.formato] ?? row.formato,
+                  impressions: row.impressoes ?? row.alcanceMedio ?? 0,
+                  ctr: row.ctr ?? 0,
+                  reactions: row.taxaReacao ?? row.taxaEngajamento ?? 0,
+                  reposts: row.reposts ?? 0,
+                  comments: row.comentarios ?? 0,
+                }))
+              : emptyLinkedinFormats(),
+          )
           const audience = await api.metrics.linkedinAudience()
           if (!active) return
-          setAudienceData((current) => {
-            const next = { ...current }
+          setAudienceData(() => {
+            const next: Record<string, { label: string; value: number }[]> =
+              emptyAudienceData()
             for (const [apiTab, segments] of Object.entries<{
               label: string
               value: number
             }[]>(audience)) {
               const label = AUDIENCE_TAB_FROM_API[apiTab]
-              if (label && segments?.length) next[label] = segments
+              if (label) next[label] = segments ?? []
             }
             return next
           })
@@ -893,19 +853,18 @@ export function DashboardFigma({
     }))
   }
 
-  // Persiste os KPIs e a matriz de formatos ao sair do modo de edição, para que "atualizadoEm" reflita a edição de verdade
-  // e a métrica saia da lista de desatualizadas — a matriz de formatos (instagramFormats/linkedinFormats) ainda vive em estado local
+  // Persiste todos os campos editáveis antes de sair do modo de edição.
   async function finishEditing() {
     const kpisPayload =
       activeChannel === "instagram"
         ? [
             {
               nome: "Alcance & Impressões",
-              valor: compact(global.reachOverride || totals.reach),
+              valor: compact(global.reachOverride),
             },
             {
               nome: "Taxa de Engajamento",
-              valor: `${Number(global.engagementRateOverride || engagementRate).toFixed(1)}%`,
+              valor: `${Number(global.engagementRateOverride).toFixed(1)}%`,
             },
             { nome: "CTR — Link na Bio", valor: `${channelCtr.toFixed(1)}%` },
             {
@@ -916,13 +875,11 @@ export function DashboardFigma({
         : [
             {
               nome: "Impressões & Alcance Único",
-              valor: compact(
-                global.impressionsOverride || totals.impressions || 28400,
-              ),
+              valor: compact(global.impressionsOverride),
             },
             {
               nome: "Taxa de Engajamento Geral",
-              valor: `${(global.engagementRateOverride || 4.2).toFixed(1)}%`,
+              valor: `${global.engagementRateOverride.toFixed(1)}%`,
             },
             {
               nome: "Cliques no Website / CTA",
@@ -951,92 +908,104 @@ export function DashboardFigma({
             reposts: row.reposts,
             comentarios: row.comments,
           }))
-    try {
-      const sharedPayload =
-        activeChannel === "instagram"
-          ? {
-              alcanceSeguidores: {
-                seguidores: global.followerReachShare,
-                naoSeguidores: 100 - global.followerReachShare,
-              },
-              funilStories: storyViews.map((espectadores, index) => ({
-                ordem: index + 1,
-                espectadores,
-                percentual: Math.round(
-                  (espectadores / Math.max(1, storyViews[0])) * 100,
-                ),
-              })),
-              heatmap: activityHeatmap.flatMap((row, diaSemana) =>
-                row.map((intensidade, column) => ({
-                  diaSemana,
-                  faixaHora: [6, 8, 10, 12, 14, 16, 18, 20, 22][column],
-                  intensidade,
-                })),
+    const sharedPayload =
+      activeChannel === "instagram"
+        ? {
+            ...(instagramDistributionExists
+              ? {
+                  alcanceSeguidores: {
+                    seguidores: global.followerReachShare,
+                    naoSeguidores: 100 - global.followerReachShare,
+                  },
+                }
+              : {}),
+            funilStories: storyViews.map((espectadores, index) => ({
+              ordem: index + 1,
+              espectadores,
+              percentual: Math.round(
+                (espectadores / Math.max(1, storyViews[0])) * 100,
               ),
-            }
-          : {
-              alcanceSeguidores: {
-                seguidores: organicShare,
-                naoSeguidores: 100 - organicShare,
-              },
-            }
-      await api.metrics.saveDashboard(activeChannel.toUpperCase(), {
-        kpis: kpisPayload,
-        formatos: formatosPayload,
-        ...sharedPayload,
-      })
-      setDashboardMeta(await api.metrics.dashboard(activeChannel.toUpperCase()))
-      await persistGlobal(activeChannel, global)
-      if (activeChannel === "linkedin") {
-        const apiTab = AUDIENCE_TAB_TO_API[audienceTab]
-        if (apiTab)
-          await api.metrics.saveLinkedinAudience(
-            apiTab,
-            audienceData[audienceTab],
-          )
-      }
-    } catch (error) {
-      console.error(error)
+            })),
+            heatmap: activityHeatmap.flatMap((row, diaSemana) =>
+              row.map((intensidade, column) => ({
+                diaSemana,
+                faixaHora: [6, 8, 10, 12, 14, 16, 18, 20, 22][column],
+                intensidade,
+              })),
+            ),
+          }
+        : {
+            ...(linkedinDistributionExists
+              ? {
+                  alcanceSeguidores: {
+                    seguidores: organicShare,
+                    naoSeguidores: 100 - organicShare,
+                  },
+                }
+              : {}),
+          }
+    await api.metrics.saveDashboard(activeChannel.toUpperCase(), {
+      kpis: kpisPayload,
+      formatos: formatosPayload,
+      ...sharedPayload,
+    })
+    await persistGlobal(activeChannel, global)
+    if (activeChannel === "linkedin") {
+      const apiTab = AUDIENCE_TAB_TO_API[audienceTab]
+      if (apiTab)
+        await api.metrics.saveLinkedinAudience(
+          apiTab,
+          audienceData[audienceTab],
+        )
+    }
+    setDashboardMeta(await api.metrics.dashboard(activeChannel.toUpperCase()))
+  }
+
+  async function toggleEditing() {
+    if (!editMode) {
+      setSaveError("")
+      setEditMode(true)
+      return
+    }
+    setSavingDashboard(true)
+    setSaveError("")
+    try {
+      await finishEditing()
+      setInlineEdit(null)
+      setEditMode(false)
+    } catch (cause) {
+      setSaveError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível salvar as métricas.",
+      )
+    } finally {
+      setSavingDashboard(false)
     }
   }
 
-  // Autosave: além de persistir ao clicar em "Concluir edição", salva sozinho (com um pequeno debounce)
-  // a cada alteração feita em modo de edição, e faz flush imediato ao trocar de canal ou sair da tela —
-  // assim nada se perde se o usuário trocar de conta/aba sem clicar explicitamente em "Concluir edição".
-  // autosaveFn só é atualizado enquanto o usuário edita (efeito abaixo), nunca por um render de troca de
-  // canal isolado — assim o flush do efeito de troca de canal sempre usa o contexto do canal que estava
-  // sendo editado, não o novo.
-  const autosaveDirty = useRef(false)
-  const autosaveFn = useRef(finishEditing)
-  useEffect(() => {
-    if (!editMode) return
-    autosaveFn.current = finishEditing
-    autosaveDirty.current = true
-    const timer = window.setTimeout(() => {
-      autosaveDirty.current = false
-      void autosaveFn.current()
-    }, 700)
-    return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    editMode,
-    activityHeatmap,
-    storyViews,
-    instagramFormats,
-    linkedinFormats,
-    organicShare,
-    globalMetrics,
-    audienceData,
-  ])
-  useEffect(() => {
-    return () => {
-      if (autosaveDirty.current) {
-        autosaveDirty.current = false
-        void autosaveFn.current()
+  async function switchDashboardChannel(nextChannel: "instagram" | "linkedin") {
+    if (nextChannel === activeChannel || savingDashboard) return
+    if (editMode) {
+      setSavingDashboard(true)
+      setSaveError("")
+      try {
+        await finishEditing()
+        setEditMode(false)
+        setInlineEdit(null)
+      } catch (cause) {
+        setSaveError(
+          cause instanceof Error
+            ? cause.message
+            : "Não foi possível salvar as métricas.",
+        )
+        setSavingDashboard(false)
+        return
       }
+      setSavingDashboard(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChannel])
+    setChannel(nextChannel)
+  }
 
   const formatLabel: Record<Post["format"], string> = {
     reel: "Reels",
@@ -1076,7 +1045,7 @@ export function DashboardFigma({
             label: "Alcance & Impressões",
             value: compact(totals.reach),
             sub: `${compact(totals.impressions)} impressões`,
-            delta: 8.4,
+            delta: undefined,
             color: "#50E678",
             icon: <Globe size={18} />,
           },
@@ -1084,7 +1053,7 @@ export function DashboardFigma({
             label: "Taxa de Engajamento",
             value: `${engagementRate.toFixed(1)}%`,
             sub: "interações ÷ alcance",
-            delta: 6.7,
+            delta: undefined,
             color: "#507AE6",
             icon: <BarChart2 size={18} />,
           },
@@ -1092,7 +1061,7 @@ export function DashboardFigma({
             label: "CTR — Link na Bio",
             value: `${channelCtr.toFixed(1)}%`,
             sub: `${global.channelClicks.toLocaleString("pt-BR")} cliques`,
-            delta: -1.2,
+            delta: undefined,
             color: "#7D1AD7",
             icon: <TrendingUp size={18} />,
           },
@@ -1100,7 +1069,7 @@ export function DashboardFigma({
             label: "Crescimento de Seguidores",
             value: `+${global.followersGrowth}`,
             sub: `${global.followersTotal.toLocaleString("pt-BR")} seguidores totais`,
-            delta: 14.7,
+            delta: undefined,
             color: "#50E678",
             icon: <Users size={18} />,
           },
@@ -1110,7 +1079,7 @@ export function DashboardFigma({
             label: "Impressões & Alcance Único",
             value: compact(totals.impressions),
             sub: `${compact(totals.reach)} pessoas`,
-            delta: 3.1,
+            delta: undefined,
             color: "#507AE6",
             icon: <Globe size={18} />,
           },
@@ -1118,7 +1087,7 @@ export function DashboardFigma({
             label: "Taxa de Engajamento Geral",
             value: `${engagementRate.toFixed(1)}%`,
             sub: "interações ÷ alcance",
-            delta: 1.8,
+            delta: undefined,
             color: "#50E678",
             icon: <BarChart2 size={18} />,
           },
@@ -1126,7 +1095,7 @@ export function DashboardFigma({
             label: "Cliques Website / CTA",
             value: `+${global.channelClicks}`,
             sub: `${channelCtr.toFixed(1)}% CTR do canal`,
-            delta: 6.4,
+            delta: undefined,
             color: "#7D1AD7",
             icon: <TrendingUp size={18} />,
           },
@@ -1134,16 +1103,16 @@ export function DashboardFigma({
             label: "Crescimento de Seguidores",
             value: `+${global.followersGrowth}`,
             sub: `${global.followersTotal.toLocaleString("pt-BR")} seguidores totais`,
-            delta: 14.7,
+            delta: undefined,
             color: "#50E678",
             icon: <Users size={18} />,
           },
         ]
 
   if (activeChannel === "instagram") {
-    const shownReach = global.reachOverride || totals.reach
-    const shownImpressions = global.impressionsOverride || totals.impressions
-    const shownEngagement = global.engagementRateOverride || engagementRate
+    const shownReach = global.reachOverride
+    const shownImpressions = global.impressionsOverride
+    const shownEngagement = global.engagementRateOverride
     const updateGlobal = (patch: Partial<GlobalChannelMetrics>) =>
       setGlobalMetrics((current) => ({
         ...current,
@@ -1173,7 +1142,8 @@ export function DashboardFigma({
                   Instagram
                 </button>
                 <button
-                  onClick={() => setChannel("linkedin")}
+                  onClick={() => void switchDashboardChannel("linkedin")}
+                  disabled={savingDashboard}
                   className="px-4 py-2 rounded-lg text-xs font-medium text-[#999]"
                 >
                   LinkedIn
@@ -1184,12 +1154,9 @@ export function DashboardFigma({
               </h2>
             </div>
             <button
-              onClick={() => {
-                if (editMode) finishEditing()
-                setEditMode((value) => !value)
-                setInlineEdit(null)
-              }}
-              className="px-4 py-2.5 rounded-xl text-xs font-medium text-white border border-[rgba(255,255,255,.1)]"
+              onClick={() => void toggleEditing()}
+              disabled={savingDashboard}
+              className="px-4 py-2.5 rounded-xl text-xs font-medium text-white border border-[rgba(255,255,255,.1)] disabled:opacity-50"
               style={{
                 background: editMode
                   ? "linear-gradient(135deg,#7D1AD7,#507AE6)"
@@ -1197,7 +1164,11 @@ export function DashboardFigma({
               }}
             >
               <Edit2 size={13} className="inline mr-1.5" />
-              {editMode ? "Concluir edição" : "Editar dados"}
+              {savingDashboard
+                ? "Salvando…"
+                : editMode
+                  ? "Concluir edição"
+                  : "Editar dados"}
             </button>
           </div>
           {editMode && (
@@ -1205,6 +1176,11 @@ export function DashboardFigma({
               <Edit2 size={13} className="inline mr-2" />
               Modo de edição ativo — altere os valores diretamente nos cards,
               tabelas e células.
+            </div>
+          )}
+          {saveError && (
+            <div className="rounded-xl px-4 py-3 text-xs text-[#FF9F9F] border border-[rgba(255,82,82,.3)] bg-[rgba(255,82,82,.08)]">
+              {saveError}
             </div>
           )}
           {staleBanner}
@@ -1318,11 +1294,12 @@ export function DashboardFigma({
                   min="0"
                   max="100"
                   value={global.followerReachShare}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setInstagramDistributionExists(true)
                     updateGlobal({
                       followerReachShare: Number(event.target.value),
                     })
-                  }
+                  }}
                   className="flex-1 accent-[#E43678]"
                 />
                 <strong className="text-sm text-[#F0F0F5] w-10 text-right">
@@ -1334,7 +1311,9 @@ export function DashboardFigma({
               ["Seguidores", global.followerReachShare, "#E43678"],
               [
                 "Não seguidores (Descoberta)",
-                100 - global.followerReachShare,
+                instagramDistributionExists
+                  ? 100 - global.followerReachShare
+                  : 0,
                 "#FF9F1A",
               ],
             ].map(([label, value, color]) => (
@@ -1672,7 +1651,8 @@ export function DashboardFigma({
             <div className="flex items-center gap-4">
               <div className="inline-flex rounded-xl p-1 bg-[rgba(255,255,255,.04)]">
                 <button
-                  onClick={() => setChannel("instagram")}
+                  onClick={() => void switchDashboardChannel("instagram")}
+                  disabled={savingDashboard}
                   className="px-4 py-2 rounded-lg text-xs font-medium text-[#999]"
                 >
                   Instagram
@@ -1691,12 +1671,9 @@ export function DashboardFigma({
               </h2>
             </div>
             <button
-              onClick={() => {
-                if (editMode) finishEditing()
-                setEditMode((value) => !value)
-                setInlineEdit(null)
-              }}
-              className="px-4 py-2.5 rounded-xl text-xs font-medium text-white border border-[rgba(255,255,255,.1)]"
+              onClick={() => void toggleEditing()}
+              disabled={savingDashboard}
+              className="px-4 py-2.5 rounded-xl text-xs font-medium text-white border border-[rgba(255,255,255,.1)] disabled:opacity-50"
               style={{
                 background: editMode
                   ? "linear-gradient(135deg,#7D1AD7,#507AE6)"
@@ -1704,7 +1681,11 @@ export function DashboardFigma({
               }}
             >
               <Edit2 size={13} className="inline mr-1.5" />
-              {editMode ? "Concluir edição" : "Editar dados"}
+              {savingDashboard
+                ? "Salvando…"
+                : editMode
+                  ? "Concluir edição"
+                  : "Editar dados"}
             </button>
           </div>
           {editMode && (
@@ -1712,6 +1693,11 @@ export function DashboardFigma({
               <Edit2 size={13} className="inline mr-2" />
               Modo de edição ativo — altere os valores diretamente nos cards,
               tabelas e células.
+            </div>
+          )}
+          {saveError && (
+            <div className="rounded-xl px-4 py-3 text-xs text-[#FF9F9F] border border-[rgba(255,82,82,.3)] bg-[rgba(255,82,82,.08)]">
+              {saveError}
             </div>
           )}
           {staleBanner}
@@ -1730,28 +1716,27 @@ export function DashboardFigma({
               {[
                 {
                   label: "Impressões & Alcance Único",
-                  value:
-                    global.impressionsOverride || totals.impressions || 28400,
+                  value: global.impressionsOverride,
                   sub: "Impressões orgânicas + patrocinadas no período",
-                  delta: "+3,1%",
+                  delta: null,
                 },
                 {
                   label: "Taxa de Engajamento Geral",
-                  value: `${(global.engagementRateOverride || 4.2).toFixed(1)}%`,
+                  value: `${global.engagementRateOverride.toFixed(1)}%`,
                   sub: "(Cliques + Reações + Comentários + Reposts) / Impressões",
-                  delta: "+1,8%",
+                  delta: null,
                 },
                 {
                   label: "Cliques no Website / CTA",
                   value: `+${global.channelClicks}`,
                   sub: "Cliques no botão principal da página LinkedIn",
-                  delta: "+6,4%",
+                  delta: null,
                 },
                 {
                   label: "Crescimento de Seguidores",
                   value: `+${global.followersGrowth}`,
                   sub: "Novos seguidores orgânicos + patrocinados",
-                  delta: "+14,7%",
+                  delta: null,
                 },
               ].map((card) => (
                 <div
@@ -1781,9 +1766,11 @@ export function DashboardFigma({
                     {typeof card.value === "number"
                       ? compact(card.value)
                       : card.value}{" "}
-                    <span className="text-xs text-[#50E678]">
-                      ↗ {card.delta}
-                    </span>
+                    {card.delta && (
+                      <span className="text-xs text-[#50E678]">
+                        ↗ {card.delta}
+                      </span>
+                    )}
                   </p>
                   <p className="text-[11px] text-[#777] mt-2 leading-relaxed">
                     {card.sub}
@@ -1804,7 +1791,7 @@ export function DashboardFigma({
                 </p>
               </div>
               <span className="text-xs text-[#507AE6]">
-                {compact(totals.impressions || 28400)} impressões totais
+                {compact(global.impressionsOverride)} impressões totais
               </span>
             </div>
             {editMode && (
@@ -1814,9 +1801,10 @@ export function DashboardFigma({
                   min="0"
                   max="100"
                   value={organicShare}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setLinkedinDistributionExists(true)
                     setOrganicShare(Number(event.target.value))
-                  }
+                  }}
                   className="flex-1 accent-[#0A66C2]"
                 />
                 <strong>{organicShare}%</strong>
@@ -1824,7 +1812,11 @@ export function DashboardFigma({
             )}
             {[
               ["Orgânico", organicShare, "#0A66C2"],
-              ["Patrocinado (Sponsored)", 100 - organicShare, "#FF9F1A"],
+              [
+                "Patrocinado (Sponsored)",
+                linkedinDistributionExists ? 100 - organicShare : 0,
+                "#FF9F1A",
+              ],
             ].map(([label, value, color]) => (
               <div key={String(label)} className="mb-3">
                 <div className="flex justify-between text-xs mb-1.5">
@@ -1944,38 +1936,25 @@ export function DashboardFigma({
               {
                 title: "Top Posts por CTR",
                 color: "#0A66C2",
-                items: [
-                  [
-                    "Como aumentar conversão B2B com LinkedIn Ads",
-                    "4,8 CTR · 3.200 alcance",
-                  ],
-                  [
-                    "5 erros fatais no funil de vendas enterprise",
-                    "3,6 CTR · 2.850 alcance",
-                  ],
-                  [
-                    "Framework de decisão para CMOs em 2026",
-                    "2,9 CTR · 1.970 alcance",
-                  ],
-                ],
+                items: [...filteredPosts]
+                  .filter((post) => post.ctr != null)
+                  .sort((a, b) => (b.ctr ?? 0) - (a.ctr ?? 0))
+                  .slice(0, 3)
+                  .map((post) => [
+                    post.title,
+                    `${(post.ctr ?? 0).toLocaleString("pt-BR")} CTR · ${post.insights.reach.toLocaleString("pt-BR")} alcance`,
+                  ]),
               },
               {
                 title: "Top Posts por Reposts",
                 color: "#7D1AD7",
-                items: [
-                  [
-                    "O futuro do marketing B2B é conversacional",
-                    "187 reposts · 14.200 impressões",
-                  ],
-                  [
-                    "Métricas que realmente importam para o board",
-                    "134 reposts · 9.800 impressões",
-                  ],
-                  [
-                    "Por que 80% dos leads B2B são desperdiçados",
-                    "98 reposts · 7.300 impressões",
-                  ],
-                ],
+                items: [...filteredPosts]
+                  .sort((a, b) => b.insights.shares - a.insights.shares)
+                  .slice(0, 3)
+                  .map((post) => [
+                    post.title,
+                    `${post.insights.shares.toLocaleString("pt-BR")} reposts · ${post.insights.impressions.toLocaleString("pt-BR")} impressões`,
+                  ]),
               },
             ].map((group) => (
               <section
@@ -1986,6 +1965,11 @@ export function DashboardFigma({
                   {group.title}
                 </h3>
                 <div className="mt-4 space-y-3">
+                  {group.items.length === 0 && (
+                    <p className="text-xs text-[#777]">
+                      Nenhum post com dados disponível.
+                    </p>
+                  )}
                   {group.items.map(([title, meta], index) => (
                     <div key={title} className="flex gap-3">
                       <span
@@ -2020,7 +2004,7 @@ export function DashboardFigma({
                   Vídeo — Taxa de Conclusão
                 </p>
                 <p className="text-3xl font-bold text-[#507AE6] mt-3">
-                  62<span className="text-sm">%</span>
+                  0<span className="text-sm">%</span>
                 </p>
                 <p className="text-xs text-[#777] mt-2">
                   Visualizações que chegaram ao final
@@ -2031,7 +2015,7 @@ export function DashboardFigma({
                   Documento PDF — Swipe-through
                 </p>
                 <p className="text-3xl font-bold text-[#7D1AD7] mt-3">
-                  48<span className="text-sm">%</span>
+                  0<span className="text-sm">%</span>
                 </p>
                 <p className="text-xs text-[#777] mt-2">
                   Leitores que chegaram até o fim

@@ -13,8 +13,8 @@ import { MQLView } from "./mql/MqlFeature"
 interface Props { channel: Channel; setChannel: (channel: Channel) => void }
 
 const defaultGlobalMetrics: GlobalMetricsState = {
-  instagram: { followersTotal: 18420, followersGrowth: 342, channelClicks: 624, profileVisits: 27130, roi: 184.5, conversions: 93, reachOverride: 48200, impressionsOverride: 0, engagementRateOverride: 4.8, followerReachShare: 62 },
-  linkedin: { followersTotal: 9780, followersGrowth: 127, channelClicks: 624, profileVisits: 14860, roi: 163.2, conversions: 61, reachOverride: 0, impressionsOverride: 28400, engagementRateOverride: 4.2, followerReachShare: 68 },
+  instagram: { followersTotal: 0, followersGrowth: 0, channelClicks: 0, profileVisits: 0, roi: 0, conversions: 0, reachOverride: 0, impressionsOverride: 0, engagementRateOverride: 0, followerReachShare: 0 },
+  linkedin: { followersTotal: 0, followersGrowth: 0, channelClicks: 0, profileVisits: 0, roi: 0, conversions: 0, reachOverride: 0, impressionsOverride: 0, engagementRateOverride: 0, followerReachShare: 0 },
 }
 
 export default function MetricsPage({ channel, setChannel }: Props) {

@@ -333,32 +333,18 @@ const globalBody = z.object({
   impressionsOverride: z.number().int().min(0),
   engagementRateOverride: z.number().min(0),
 })
-const globalDefaults: Record<"INSTAGRAM" | "LINKEDIN", z.infer<typeof globalBody>> =
-  {
-    INSTAGRAM: {
-      followersTotal: 18420,
-      followersGrowth: 342,
-      channelClicks: 624,
-      profileVisits: 27130,
-      roi: 184.5,
-      conversions: 93,
-      reachOverride: 48200,
-      impressionsOverride: 0,
-      engagementRateOverride: 4.8,
-    },
-    LINKEDIN: {
-      followersTotal: 9780,
-      followersGrowth: 127,
-      channelClicks: 624,
-      profileVisits: 14860,
-      roi: 163.2,
-      conversions: 61,
-      reachOverride: 0,
-      impressionsOverride: 28400,
-      engagementRateOverride: 4.2,
-    },
-  }
-const serializeGlobal = (row: any, plataforma: "INSTAGRAM" | "LINKEDIN") =>
+const emptyGlobalMetrics: z.infer<typeof globalBody> = {
+  followersTotal: 0,
+  followersGrowth: 0,
+  channelClicks: 0,
+  profileVisits: 0,
+  roi: 0,
+  conversions: 0,
+  reachOverride: 0,
+  impressionsOverride: 0,
+  engagementRateOverride: 0,
+}
+const serializeGlobal = (row: any, _plataforma: "INSTAGRAM" | "LINKEDIN") =>
   row
     ? {
         followersTotal: row.followersTotal,
@@ -371,7 +357,7 @@ const serializeGlobal = (row: any, plataforma: "INSTAGRAM" | "LINKEDIN") =>
         impressionsOverride: row.impressionsOverride,
         engagementRateOverride: row.engagementRateOverride,
       }
-    : globalDefaults[plataforma]
+    : emptyGlobalMetrics
 metricsRouter.get(
   "/global",
   asyncRoute(async (req, res) => {
@@ -408,39 +394,10 @@ const audienceDefaults: Record<typeof AUDIENCE_TABS[number], {
   label: string
   value: number
 }[]> = {
-  CARGO: [
-    { label: "Marketing & Comunicação", value: 28 },
-    { label: "Engenharia & Tecnologia", value: 22 },
-    { label: "Vendas & Negócios", value: 18 },
-    { label: "Liderança (C-Level, VP)", value: 12 },
-    { label: "RH & Gestão de Pessoas", value: 8 },
-    { label: "Financeiro", value: 7 },
-    { label: "Outros", value: 5 },
-  ],
-  SENIORIDADE: [
-    { label: "Pleno", value: 31 },
-    { label: "Sênior", value: 27 },
-    { label: "Gerência", value: 19 },
-    { label: "Diretoria", value: 12 },
-    { label: "C-Level", value: 7 },
-    { label: "Júnior", value: 4 },
-  ],
-  SETOR: [
-    { label: "Tecnologia", value: 32 },
-    { label: "Serviços profissionais", value: 23 },
-    { label: "Educação", value: 16 },
-    { label: "Varejo", value: 12 },
-    { label: "Indústria", value: 10 },
-    { label: "Outros", value: 7 },
-  ],
-  LOCALIZACAO: [
-    { label: "São Paulo", value: 38 },
-    { label: "Recife", value: 19 },
-    { label: "Rio de Janeiro", value: 16 },
-    { label: "Belo Horizonte", value: 11 },
-    { label: "Curitiba", value: 9 },
-    { label: "Outros", value: 7 },
-  ],
+  CARGO: [],
+  SENIORIDADE: [],
+  SETOR: [],
+  LOCALIZACAO: [],
 }
 metricsRouter.get(
   "/linkedin-audience",

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import {
   BarChart2,
   TrendingUp,
@@ -610,6 +610,7 @@ export function DashboardFigma({
     useState<Record<string, { label: string; value: number }[]>>(
       emptyAudienceData,
     )
+  const dirtyAudienceTabs = useRef<Set<string>>(new Set())
   const activeChannel: "instagram" | "linkedin" =
     channel === "linkedin" ? "linkedin" : "instagram"
   const filteredPosts = useMemo(
@@ -718,6 +719,7 @@ export function DashboardFigma({
             }
             return next
           })
+          dirtyAudienceTabs.current.clear()
         }
       } catch {
         if (active) setDashboardMeta(null)
@@ -955,13 +957,17 @@ export function DashboardFigma({
       ...sharedPayload,
     })
     await persistGlobal(activeChannel, global)
-    if (activeChannel === "linkedin") {
-      const apiTab = AUDIENCE_TAB_TO_API[audienceTab]
-      if (apiTab)
-        await api.metrics.saveLinkedinAudience(
-          apiTab,
-          audienceData[audienceTab],
-        )
+    if (activeChannel === "linkedin" && dirtyAudienceTabs.current.size > 0) {
+      const changedTabs = Array.from(dirtyAudienceTabs.current)
+      for (const changedTab of changedTabs) {
+        const apiTab = AUDIENCE_TAB_TO_API[changedTab]
+        if (apiTab)
+          await api.metrics.saveLinkedinAudience(
+            apiTab,
+            audienceData[changedTab] ?? [],
+          )
+      }
+      dirtyAudienceTabs.current.clear()
     }
     setDashboardMeta(await api.metrics.dashboard(activeChannel.toUpperCase()))
   }
@@ -969,6 +975,7 @@ export function DashboardFigma({
   async function toggleEditing() {
     if (!editMode) {
       setSaveError("")
+      dirtyAudienceTabs.current.clear()
       setEditMode(true)
       return
     }
@@ -2145,7 +2152,8 @@ export function DashboardFigma({
                         min={0}
                         max={100}
                         value={item.value}
-                        onChange={(n) =>
+                        onChange={(n) => {
+                          dirtyAudienceTabs.current.add(audienceTab)
                           setAudienceData((current) => ({
                             ...current,
                             [audienceTab]: current[audienceTab].map(
@@ -2153,7 +2161,7 @@ export function DashboardFigma({
                                 i === index ? { ...entry, value: n } : entry,
                             ),
                           }))
-                        }
+                        }}
                         className="w-14 px-2 py-1 rounded-md text-xs border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
                       />
                     ) : (

@@ -424,21 +424,22 @@ metricsRouter.put(
               label: z.string().trim().min(1),
               value: z.number().int().min(0),
             }),
-          )
-          .min(1),
+          ),
       })
       .parse(req.body)
-    await prisma.$transaction([
-      prisma.audienceSegment.deleteMany({ where: { tab: body.tab } }),
-      prisma.audienceSegment.createMany({
-        data: body.segmentos.map((s, ordem) => ({
-          tab: body.tab,
-          label: s.label,
-          value: s.value,
-          ordem,
-        })),
-      }),
-    ])
+    await prisma.$transaction(async (tx) => {
+      await tx.audienceSegment.deleteMany({ where: { tab: body.tab } })
+      if (body.segmentos.length > 0) {
+        await tx.audienceSegment.createMany({
+          data: body.segmentos.map((s, ordem) => ({
+            tab: body.tab,
+            label: s.label,
+            value: s.value,
+            ordem,
+          })),
+        })
+      }
+    })
     res.json({ tab: body.tab, segmentos: body.segmentos })
   }),
 )

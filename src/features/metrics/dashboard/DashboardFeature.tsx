@@ -835,6 +835,7 @@ export function DashboardFigma({
       notation: "compact",
       maximumFractionDigits: 1,
     }).format(value)
+  const signed = (value: number) => (value > 0 ? `+${value}` : `${value}`)
 
   async function persistGlobal(
     channelKey: "instagram" | "linkedin",
@@ -873,7 +874,7 @@ export function DashboardFigma({
             { nome: "CTR — Link na Bio", valor: `${channelCtr.toFixed(1)}%` },
             {
               nome: "Crescimento de Seguidores",
-              valor: `+${global.followersGrowth}`,
+              valor: signed(global.followersGrowth),
             },
           ]
         : [
@@ -887,11 +888,11 @@ export function DashboardFigma({
             },
             {
               nome: "Cliques no Website / CTA",
-              valor: `+${global.channelClicks}`,
+              valor: signed(global.channelClicks),
             },
             {
               nome: "Crescimento de Seguidores",
-              valor: `+${global.followersGrowth}`,
+              valor: signed(global.followersGrowth),
             },
           ]
     const formatosPayload =
@@ -1071,7 +1072,7 @@ export function DashboardFigma({
           },
           {
             label: "Crescimento de Seguidores",
-            value: `+${global.followersGrowth}`,
+            value: signed(global.followersGrowth),
             sub: `${global.followersTotal.toLocaleString("pt-BR")} seguidores totais`,
             delta: undefined,
             color: "#50E678",
@@ -1097,7 +1098,7 @@ export function DashboardFigma({
           },
           {
             label: "Cliques Website / CTA",
-            value: `+${global.channelClicks}`,
+            value: signed(global.channelClicks),
             sub: `${channelCtr.toFixed(1)}% CTR do canal`,
             delta: undefined,
             color: "#7D1AD7",
@@ -1105,7 +1106,7 @@ export function DashboardFigma({
           },
           {
             label: "Crescimento de Seguidores",
-            value: `+${global.followersGrowth}`,
+            value: signed(global.followersGrowth),
             sub: `${global.followersTotal.toLocaleString("pt-BR")} seguidores totais`,
             delta: undefined,
             color: "#50E678",
@@ -1758,13 +1759,13 @@ export function DashboardFigma({
                 },
                 {
                   label: "Cliques no Website / CTA",
-                  value: `+${global.channelClicks}`,
+                  value: signed(global.channelClicks),
                   sub: "Cliques no botão principal da página LinkedIn",
                   delta: null,
                 },
                 {
                   label: "Crescimento de Seguidores",
-                  value: `+${global.followersGrowth}`,
+                  value: signed(global.followersGrowth),
                   sub: "Novos seguidores orgânicos + patrocinados",
                   delta: null,
                 },

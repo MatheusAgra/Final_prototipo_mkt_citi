@@ -266,25 +266,21 @@ metricsRouter.put(
           update: changed ? { ...row, atualizadoEm: new Date() } : row,
         })
       }
-      for (const row of body.funilStories ?? [])
-        await tx.storyFunnelStep.upsert({
-          where: { plataforma_ordem: { plataforma, ordem: row.ordem } },
-          create: { plataforma, ...row },
-          update: row,
-        })
-      for (const row of body.heatmap ?? [])
-        await tx.activityHeatmapCell.upsert({
-          where: {
-            plataforma_diaSemana_faixaHora: {
-              plataforma,
-              diaSemana: row.diaSemana,
-              faixaHora: row.faixaHora,
-            },
-          },
-          create: { plataforma, ...row },
-          update: row,
-        })
-    })
+      if (body.funilStories) {
+        await tx.storyFunnelStep.deleteMany({ where: { plataforma } })
+        if (body.funilStories.length)
+          await tx.storyFunnelStep.createMany({
+            data: body.funilStories.map((row) => ({ plataforma, ...row })),
+          })
+      }
+      if (body.heatmap) {
+        await tx.activityHeatmapCell.deleteMany({ where: { plataforma } })
+        if (body.heatmap.length)
+          await tx.activityHeatmapCell.createMany({
+            data: body.heatmap.map((row) => ({ plataforma, ...row })),
+          })
+      }
+    }, { timeout: 20_000 })
     res.json(await dashboardPayload(plataforma))
   }),
 )

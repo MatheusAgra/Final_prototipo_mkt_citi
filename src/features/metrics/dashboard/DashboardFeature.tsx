@@ -305,16 +305,20 @@ function Dashboard({
               Alcance por post (julho)
             </h3>
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={posts.slice(0, 6).map((p) => ({
+              <BarChart
+                data={posts.slice(0, 6).map((p) => ({
                   name: p.title.slice(0, 20) + "…",
                   reach: p.insights.reach,
                   channel: p.channel,
-                }))} margin={{
+                }))}
+                margin={{
                   top: 0,
                   right: 0,
                   left: -20,
                   bottom: 0,
-                }} barSize={20}>
+                }}
+                barSize={20}
+              >
                 <CartesianGrid
                   strokeDasharray="3 3"
                   stroke="rgba(255,255,255,0.06)"
@@ -1121,6 +1125,27 @@ export function DashboardFigma({
     const storyPercent = storyViews.map((value) =>
       Math.round((value / Math.max(1, storyViews[0])) * 100),
     )
+    const storyRetention = storyViews[0] > 0 ? (storyPercent.at(-1) ?? 0) : 0
+    const storyDropOff =
+      storyViews[0] > 0
+        ? Math.max(
+            0,
+            Math.round(
+              (100 - storyRetention) / Math.max(1, storyViews.length - 1),
+            ),
+          )
+        : 0
+    const bestStoryTransition = storyViews.reduce<{
+      label: string
+      drop: number
+    } | null>((best, value, index) => {
+      if (index === 0 || storyViews[index - 1] <= 0) return best
+      const previous = storyViews[index - 1]
+      const drop = Math.max(0, ((previous - value) / previous) * 100)
+      return !best || drop < best.drop
+        ? { label: `Story ${index}→${index + 1}`, drop }
+        : best
+    }, null)
     const days = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     const hours = ["6h", "8h", "10h", "12h", "14h", "16h", "18h", "20h", "22h"]
     const manualIg = visibleMetrics.filter(
@@ -1486,16 +1511,21 @@ export function DashboardFigma({
                     </strong>
                   )}
                   <span className="text-[#FF5252] text-right">
-                    {index ? `−${storyViews[index - 1] - value}` : ""}
+                    {index
+                      ? Math.max(
+                          0,
+                          storyViews[index - 1] - value,
+                        ).toLocaleString("pt-BR")
+                      : ""}
                   </span>
                 </div>
               ))}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               {[
-                [`${storyPercent.at(-1)}%`, "Retenção total", "#50E678"],
-                ["17%", "Drop-off médio/slide", "#FF5252"],
-                ["Story 1→2", "Melhor trecho", "#6C63FF"],
+                [`${storyRetention}%`, "Retenção total", "#50E678"],
+                [`${storyDropOff}%`, "Drop-off médio/slide", "#FF5252"],
+                [bestStoryTransition?.label ?? "—", "Melhor trecho", "#6C63FF"],
               ].map(([value, label, color]) => (
                 <div
                   key={label}

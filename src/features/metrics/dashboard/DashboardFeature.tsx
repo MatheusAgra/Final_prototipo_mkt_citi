@@ -44,6 +44,30 @@ const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) =>
 // Number('') vire 0 e "prenda" o valor — o pai só recebe um número novo quando o texto digitado é válido.
 import { channelDist, KpiCard, Modal, NumericInput } from "../components/shared"
 import { UNIT_LABELS } from "../custom/CustomMetricsFeature"
+
+function PercentageInput({
+  className = "",
+  wrapperClassName = "",
+  showPercent = true,
+  ...props
+}: React.ComponentProps<typeof NumericInput> & {
+  wrapperClassName?: string
+  showPercent?: boolean
+}) {
+  return (
+    <div className={`relative inline-flex min-w-0 ${wrapperClassName}`}>
+      <NumericInput
+        {...props}
+        className={`${className} ${showPercent ? "pr-6" : ""}`}
+      />
+      {showPercent && (
+        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#777]">
+          %
+        </span>
+      )}
+    </div>
+  )
+}
 function Dashboard({
   posts,
   metrics,
@@ -1278,15 +1302,17 @@ export function DashboardFigma({
                 </div>
                 {inlineEdit === card.key ? (
                   <div className="flex items-center gap-2 mt-3">
-                    <NumericInput
+                    <PercentageInput
                       autoFocus
-                      step={card.percent ? ".1" : "1"}
+                      showPercent={card.key === "engagement"}
+                      step={card.key === "engagement" ? ".1" : "1"}
                       value={
                         card.key === "clicks"
                           ? global.channelClicks
                           : Number(card.value)
                       }
                       onChange={(n) => updateGlobal({ [card.field]: n })}
+                      wrapperClassName="w-full"
                       className="w-full text-xl font-bold px-2 py-1 rounded-lg border border-[#507AE6] bg-[rgba(255,255,255,.04)]"
                     />
                     <button
@@ -1426,7 +1452,8 @@ export function DashboardFigma({
                       ] as const).map((field) => (
                         <td key={field}>
                           {editMode ? (
-                            <NumericInput
+                            <PercentageInput
+                              showPercent={field === "engagement"}
                               step={field === "engagement" ? ".1" : "1"}
                               value={row[field]}
                               onChange={(n) =>
@@ -1682,6 +1709,10 @@ export function DashboardFigma({
         linkedin: { ...current.linkedin, ...patch },
       }))
     const linkedAudience = audienceData[audienceTab]
+    const linkedAudienceMax = Math.max(
+      0,
+      ...linkedAudience.map((entry) => entry.value),
+    )
     return (
       <div className="h-full overflow-auto p-4 md:p-6">
         <div className="max-w-6xl mx-auto space-y-5">
@@ -1933,7 +1964,10 @@ export function DashboardFigma({
                       ] as const).map((field) => (
                         <td key={field}>
                           {editMode ? (
-                            <NumericInput
+                            <PercentageInput
+                              showPercent={
+                                field === "ctr" || field === "reactions"
+                              }
                               step={
                                 field === "ctr" || field === "reactions"
                                   ? ".1"
@@ -2143,12 +2177,12 @@ export function DashboardFigma({
                       <div
                         className="h-full rounded-full bg-[#318ACB]"
                         style={{
-                          width: `${(item.value / Math.max(...linkedAudience.map((entry) => entry.value))) * 100}%`,
+                          width: `${linkedAudienceMax > 0 ? (item.value / linkedAudienceMax) * 100 : 0}%`,
                         }}
                       />
                     </div>
                     {editMode ? (
-                      <NumericInput
+                      <PercentageInput
                         min={0}
                         max={100}
                         value={item.value}
@@ -2162,7 +2196,8 @@ export function DashboardFigma({
                             ),
                           }))
                         }}
-                        className="w-14 px-2 py-1 rounded-md text-xs border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
+                        wrapperClassName="w-full"
+                        className="w-full px-2 py-1 rounded-md text-xs border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
                       />
                     ) : (
                       <strong className="text-xs text-right">

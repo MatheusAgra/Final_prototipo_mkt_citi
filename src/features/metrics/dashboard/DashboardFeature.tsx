@@ -58,7 +58,7 @@ function PercentageInput({
     <div className={`relative inline-flex min-w-0 ${wrapperClassName}`}>
       <NumericInput
         {...props}
-        className={`${className} ${showPercent ? "pr-6" : ""}`}
+        className={`${className} ${showPercent ? "pr-8" : ""}`}
       />
       {showPercent && (
         <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#777]">
@@ -1465,7 +1465,7 @@ export function DashboardFigma({
                                   ),
                                 )
                               }
-                              className="w-20 px-2 py-1.5 rounded-md border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)] text-[#F0F0F5]"
+                              className={`${field === "engagement" ? "w-24" : "w-20"} px-2 py-1.5 rounded-md border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)] text-[#F0F0F5]`}
                             />
                           ) : (
                             <div className="flex items-center gap-2">
@@ -1983,7 +1983,7 @@ export function DashboardFigma({
                                   ),
                                 )
                               }
-                              className="w-20 px-2 py-1.5 rounded-md border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
+                              className={`${field === "ctr" || field === "reactions" ? "w-24" : "w-20"} px-2 py-1.5 rounded-md border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]`}
                             />
                           ) : (
                             <span>
@@ -2170,7 +2170,7 @@ export function DashboardFigma({
                 {linkedAudience.map((item, index) => (
                   <div
                     key={item.label}
-                    className="grid grid-cols-[170px_1fr_54px] items-center gap-3"
+                    className="grid grid-cols-[170px_1fr_88px] items-center gap-3"
                   >
                     <span className="text-xs text-[#999]">{item.label}</span>
                     <div className="h-2 rounded-full bg-[rgba(255,255,255,.06)]">
@@ -2197,7 +2197,7 @@ export function DashboardFigma({
                           }))
                         }}
                         wrapperClassName="w-full"
-                        className="w-full px-2 py-1 rounded-md text-xs border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
+                        className="w-full px-3 py-1 rounded-md text-xs border border-[rgba(255,255,255,.12)] bg-[rgba(255,255,255,.04)]"
                       />
                     ) : (
                       <strong className="text-xs text-right">
